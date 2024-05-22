@@ -59,10 +59,17 @@ var (
 			Drupal: "^10",
 			WissKI: "",
 			InstallModules: []string{
-				"drupal/inline_entity_form:^1.0@RC",
+				"drupal/colorbox",
+				"drupal/devel:^5.0",
+				"drupal/geofield:^1.56",
+				"drupal/geofield_map:^3.0",
+				"kint-php/kint:^5",
+				"drupal/leaflet:^10.2",
 				"drupal/imagemagick",
 				"drupal/image_effects",
-				"drupal/colorbox",
+				"drupal/imce:^3.0",
+				"drupal/inline_entity_form:^1.0@RC",
+				
 			},
 			EnableModules: []string{
 				"drupal/devel:^5.0",
