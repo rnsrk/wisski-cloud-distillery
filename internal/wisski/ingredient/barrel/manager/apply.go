@@ -174,7 +174,7 @@ func (manager *Manager) applyWissKI(ctx context.Context, progress io.Writer, wis
 		logging.LogMessage(progress, "Enable Wisski modules")
 		{
 			if err := manager.dependencies.Drush.Enable(ctx, progress,
-				"wisski_core", "wisski_linkblock", "wisski_pathbuilder", "wisski_adapter_sparql11_pb", "wisski_salz",
+				"wisski", "wisski_linkblock",
 			); err != nil {
 				return err
 			}
