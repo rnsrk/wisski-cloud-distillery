@@ -55,3 +55,47 @@ func (*InstallDompurifyJS) Action() InstanceAction {
 func (*InstallDompurifyJS) Act(ctx context.Context, instance *wisski.WissKI, in io.Reader, out io.Writer, params ...string) error {
 	return instance.Barrel().Shell(ctx, stream.NewIOStream(out, out, nil), "/runtime/install_dompurify.sh")
 }
+
+type InstallMiradorJS struct {
+	component.Base
+}
+
+var (
+	_ WebsocketInstanceAction = (*InstallMiradorJS)(nil)
+)
+
+func (*InstallMiradorJS) Action() InstanceAction {
+	return InstanceAction{
+		Action: Action{
+			Name:      "install-mirador-js",
+			Scope:     scopes.ScopeUserAdmin,
+			NumParams: 0,
+		},
+	}
+}
+
+func (*InstallMiradorJS) Act(ctx context.Context, instance *wisski.WissKI, in io.Reader, out io.Writer, params ...string) error {
+	return instance.Barrel().Shell(ctx, stream.NewIOStream(out, out, nil), "/runtime/install_mirador.sh")
+}
+
+type InstallIIPMooViewerJS struct {
+	component.Base
+}
+
+var (
+	_ WebsocketInstanceAction = (*InstallIIPMooViewerJS)(nil)
+)
+
+func (*InstallIIPMooViewerJS) Action() InstanceAction {
+	return InstanceAction{
+		Action: Action{
+			Name:      "install-iipmooviewer-js",
+			Scope:     scopes.ScopeUserAdmin,
+			NumParams: 0,
+		},
+	}
+}
+
+func (*InstallIIPMooViewerJS) Act(ctx context.Context, instance *wisski.WissKI, in io.Reader, out io.Writer, params ...string) error {
+	return instance.Barrel().Shell(ctx, stream.NewIOStream(out, out, nil), "/runtime/install_iipmooviewer.sh")
+}
