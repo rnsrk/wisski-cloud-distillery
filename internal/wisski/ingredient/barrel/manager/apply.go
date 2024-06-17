@@ -174,7 +174,7 @@ func (manager *Manager) applyWissKI(ctx context.Context, progress io.Writer, wis
 		logging.LogMessage(progress, "Enable Wisski modules")
 		{
 			if err := manager.dependencies.Drush.Enable(ctx, progress,
-				"wisski", "wisski_linkblock",
+				"colorbox", "devel", "ds", "ds_extras", "ds_switch_view_mode", "file_mdm_exif", "file_mdm_font", "file_mdm", "geofield", "geofield_map", "imce", "leaflet", "leaflet_markercluster", "leaflet_views", "sophron", "sophron_guesser", "wisski", "wisski_linkblock",
 			); err != nil {
 				return err
 			}
