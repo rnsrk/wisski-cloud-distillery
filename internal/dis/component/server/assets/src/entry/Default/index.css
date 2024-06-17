@@ -17,9 +17,9 @@ img.biglogo {
         width: 33vw;
         height: 33vw;
 
-        /* but don't overdo it */
-        max-width: 20em;
-        max-height: 20em;
+        /* overdo it */
+        /*max-width: 20em;
+        max-height: 20em;*/
 
 
         /* place image next to the image, overlapping the crumbs bar */
