@@ -18,7 +18,7 @@ function create_distillery_adapter(string $LABEL, string $MACHINE_NAME, string $
     $is_preferred_local_store = TRUE; // is_preferred_local_store
     $read_url = 'http://triplestore:7200/repositories/' . $GRAPHDB_REPO; // read_url
     $write_url = 'http://triplestore:7200/repositories/' . $GRAPHDB_REPO . '/statements'; // write_url
-    $is_federatable = TRUE; // is_federatable
+    $is_federatable = 0; // is_federatable
     $default_graph_uri = 'https://' . $INSTANCE_DOMAIN . '/';
     $same_as_properties = ['http://www.w3.org/2002/07/owl#sameAs']; // same_as_properties
     $ontology_graphs = []; // ontology_graphs

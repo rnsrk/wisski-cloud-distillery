@@ -174,7 +174,7 @@ func (manager *Manager) applyWissKI(ctx context.Context, progress io.Writer, wis
 		logging.LogMessage(progress, "Enable Wisski modules")
 		{
 			if err := manager.dependencies.Drush.Enable(ctx, progress,
-				"colorbox", "devel", "ds", "ds_extras", "ds_switch_view_mode", "file_mdm_exif", "file_mdm_font", "file_mdm", "geofield", "geofield_map", "imce", "leaflet", "leaflet_markercluster", "leaflet_views", "sophron", "sophron_guesser", "wisski", "wisski_linkblock",
+				"colorbox", "conditional_fields", "devel", "ds", "ds_extras", "ds_switch_view_mode", "field_group", "file_mdm_exif", "file_mdm_font", "file_mdm", "geofield", "geofield_map", "imce", "leaflet", "leaflet_markercluster", "leaflet_views", "sophron", "sophron_guesser", "wisski", "wisski_linkblock",
 			); err != nil {
 				return err
 			}
@@ -184,9 +184,26 @@ func (manager *Manager) applyWissKI(ctx context.Context, progress io.Writer, wis
 			}
 		}
 
+		logging.LogMessage(progress, "Use main bundles for display, views for navigation")
+		{
+			if err := manager.dependencies.Drush.Exec(ctx, progress, "config:set", "wisski_core.settings", "wisski_use_only_main_bundles", "1", "--yes"); err != nil {
+				return err
+			}
+			if err := manager.dependencies.Drush.Exec(ctx, progress, "config:set", "wisski_core.settings", "wisski_use_views_for_navigate", "1", "--yes"); err != nil {
+				return err
+			}
+
+		}
 		logging.LogMessage(progress, "Performing database updates (if any)")
 		{
 			if err := manager.dependencies.Drush.Exec(ctx, progress, "updatedb", "--yes"); err != nil {
+				return err
+			}
+		}
+
+		logging.LogMessage(progress, "Clearing cache")
+		{
+			if err := manager.dependencies.Drush.Exec(ctx, progress, "cr", "--yes"); err != nil {
 				return err
 			}
 		}

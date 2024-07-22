@@ -60,8 +60,10 @@ var (
 			WissKI: "",
 			InstallModules: []string{
 				"drupal/colorbox",
+				"drupal/conditional_fields:4.x-dev@dev",
 				"drupal/devel:^5.0",
 				"drupal/ds:^3.22",
+				"drupal/field_group:3.x-dev@dev",
 				"drupal/geofield:^1.56",
 				"drupal/geofield_map:^3.0",
 				"kint-php/kint:^5",
