@@ -1,6 +1,6 @@
 /** @file provides a list of websocket calls supported by the backend */
 
-import type { CallSpec } from '.'
+import { CallSpec } from "./pow_client"
 
 /** Backup backups everything */
 export function Backup (): CallSpec {
