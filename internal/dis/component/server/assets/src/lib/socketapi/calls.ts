@@ -1,6 +1,6 @@
 /** @file provides a list of websocket calls supported by the backend */
 
-import type { CallSpec } from '.'
+import { CallSpec } from "./pow_client"
 
 /** Backup backups everything */
 export function Backup (): CallSpec {
@@ -18,7 +18,7 @@ interface ProvisionParams {
 }
 
 interface SystemParams {
-  PHP: 'Default (8.1)' | '8.0' | '8.1' | '8.2'
+  PHP: 'Default (8.1)' | '8.0' | '8.1' | '8.2' | '8.3'
   OpCacheDevelopment: boolean
   ContentSecurityPolicy: string
 }

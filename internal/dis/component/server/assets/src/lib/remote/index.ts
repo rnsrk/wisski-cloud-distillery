@@ -1,6 +1,6 @@
+import { Result } from "../socketapi/pow_client"
 import './index.css'
-import { Result } from '../apiclient/websocket'
-import LocalCall from './local'
+import LocalSession from './local'
 
 type Print = ((text: string, flush?: boolean) => void) & {
   paintedFrames: number
@@ -123,11 +123,10 @@ export default function setup (): void {
       runValidation()
     }
 
-    let onClose: ((success: boolean) => void) | undefined
+    let onClose: ((success: boolean, data: any) => void) | undefined
     if (typeof reload === 'string') {
       onClose = () => {
-        if (reload === '') location.reload()
-        else location.href = reload
+        location.href = reload === '' ? location.href : reload
       }
     }
 
@@ -149,7 +148,7 @@ export default function setup (): void {
 
 interface ModalOptions {
   bufferSize: number
-  onClose: ((success: true) => void) & ((success: false, message: string) => void)
+  onClose: ((success: true, data: any) => void) & ((success: false, message: string) => void)
 }
 export function createModal (action: string, params: string[], opts: Partial<ModalOptions>): void {
   // create a modal dialog and append it to the body
@@ -167,17 +166,17 @@ export function createModal (action: string, params: string[], opts: Partial<Mod
   finishButton.className = 'pure-button pure-button-success'
   finishButton.append(typeof opts?.onClose === 'function' ? 'Close & Finish' : 'Close')
 
-  let result: Result = { success: false, message: 'Nothing happened' }
+  let result: Result = { status: 'rejected', reason: 'Nothing happened' }
   finishButton.addEventListener('click', (event) => {
     event.preventDefault()
 
     if (typeof opts?.onClose === 'function') {
       finishButton.setAttribute('disabled', 'disabled')
       target.innerHTML = 'Finishing up ...'
-      if (result.success) {
-        opts.onClose(result.success)
+      if (result.status === 'fulfilled') {
+        opts.onClose(true, result.value)
       } else {
-        opts.onClose(result.success, result.message)
+        opts.onClose(false, result.reason ?? 'unknown error')
       }
       return
     }
@@ -198,10 +197,10 @@ export function createModal (action: string, params: string[], opts: Partial<Mod
   const close = (message: Result): void => {
     result = message
 
-    if (result.success) {
+    if (result.status === 'fulfilled') {
       print('Process completed successfully.\n', true)
     } else {
-      print('Process reported error: ' + result.message + '\n', true)
+      print('Process reported error: ' + (result.reason ?? 'unknown error') + '\n', true)
     }
 
     window.onbeforeunload = onbeforeunload
@@ -210,18 +209,19 @@ export function createModal (action: string, params: string[], opts: Partial<Mod
     modal.append(finishButton)
 
     const quota = (print.paintedFrames / (print.missedFrames + print.paintedFrames)) * 100
-    console.debug(`Terminal: painted=${print.paintedFrames} missed=${print.missedFrames} (${quota}%)`, true)
+    console.debug(`Result:`, result)
+    console.debug(`Terminal: painted=${print.paintedFrames} missed=${print.missedFrames} (${quota}%)`)
   }
 
   print('Connecting ...', true)
 
   // connect to the socket and send the action
-  const call = new LocalCall({
+  const session = new LocalSession({
     call: action,
     params
   })
 
-  call.beforeCall = function () {
+  session.beforeCall = function () {
     cancelButton.removeAttribute('disabled')
     cancelButton.addEventListener('click', (event) => {
       event.preventDefault()
@@ -231,9 +231,16 @@ export function createModal (action: string, params: string[], opts: Partial<Mod
     })
     print(' Connected.\n', true)
   }
-  call.onLogLine = print
+  session.onLogLine = print
 
-  call.connect()
-    .then((result) => close(result))
-    .catch(() => close({ success: false, message: 'connection closed unexpectedly' }))
+  session.connect()
+    .then(() => session.closeInput()) // for now none of our sessions actually have input
+    .then(() => session.wait())
+    .then((result) => {
+      close(result.result)
+    })
+    .catch((err) => {
+      console.error(err)
+      close({ status: 'rejected', reason: 'connection closed unexpectedly' })
+    })
 }

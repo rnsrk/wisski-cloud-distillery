@@ -3,7 +3,10 @@ package socket
 import (
 	"context"
 	"net/http"
+	"strings"
 
+	"github.com/FAU-CDI/process_over_websocket"
+	"github.com/FAU-CDI/process_over_websocket/proto"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/auth"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/auth/scopes"
@@ -11,17 +14,16 @@ import (
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/instances"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/instances/purger"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/provision"
+	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/server"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/server/admin/socket/actions"
-	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/server/admin/socket/proto"
-	"github.com/rs/zerolog"
-	"github.com/tkw1536/pkglib/httpx/websocket"
+	"github.com/FAU-CDI/wisski-distillery/internal/models"
 	"github.com/tkw1536/pkglib/lazy"
 )
 
 type Sockets struct {
 	component.Base
 
-	actions lazy.Lazy[proto.ActionMap]
+	handler lazy.Lazy[proto.Handler]
 
 	dependencies struct {
 		Actions  []actions.WebsocketAction
@@ -41,24 +43,32 @@ var (
 
 func (socket *Sockets) Routes() component.Routes {
 	return component.Routes{
-		Prefix:    "/api/v1/ws",
-		Exact:     true,
+		Prefix:    "/api/v1/pow",
 		Decorator: socket.dependencies.Auth.Require(true, scopes.ScopeUserValid, nil),
 	}
 }
 
 func (sockets *Sockets) HandleRoute(ctx context.Context, path string) (http.Handler, error) {
-	return &websocket.Server{
-		Context: ctx,
-		Handler: sockets.Serve,
-	}, nil
-}
-
-// Serve handles a connection to the websocket api
-func (socket *Sockets) Serve(conn *websocket.Connection) {
-	// handle the websocket connection!
-	name, err := socket.actions.Get(func() proto.ActionMap { return socket.Actions(conn.Context()) }).Handle(socket.dependencies.Auth, conn)
-	if err != nil {
-		zerolog.Ctx(conn.Context()).Err(err).Str("name", name).Msg("Error handling websocket")
+	pow := process_over_websocket.Server{
+		Handler: sockets.handler.Get(func() proto.Handler { return sockets.Actions(ctx) }),
+		Options: process_over_websocket.Options{
+			BasePath: "/api/v1/pow/",
+		},
 	}
+	pow.Options.RESTOptions.OpenAPIServerDescription = "Distillery POW Server"
+
+	// ensure that the server is closed once we are
+	go func() {
+		<-ctx.Done()
+		pow.Close()
+	}()
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// if we're in the docs, unsafely set the unsafe csp
+		if strings.HasPrefix(r.URL.Path, "/api/v1/pow/docs/") {
+			server.SetCSP(w, models.ContentSecurityPolicyPanelUnsafeScripts)
+		}
+
+		pow.ServeHTTP(w, r)
+	}), nil
 }
