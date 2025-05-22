@@ -1,8 +1,9 @@
+//spellchecker:words reserve
 package reserve
 
+//spellchecker:words embed path filepath github wisski distillery internal component ingredient
 import (
 	"embed"
-	"path/filepath"
 
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component"
 	"github.com/FAU-CDI/wisski-distillery/internal/wisski/ingredient"
@@ -17,7 +18,7 @@ type Reserve struct {
 //go:embed all:reserve
 var reserveResources embed.FS
 
-// Stack returns a stack representing the reserve instance
+// Stack returns a stack representing the reserve instance.
 func (reserve *Reserve) Stack() component.StackWithResources {
 	liquid := ingredient.GetLiquid(reserve)
 	config := ingredient.GetStill(reserve).Config
@@ -27,7 +28,7 @@ func (reserve *Reserve) Stack() component.StackWithResources {
 		},
 
 		Resources:   reserveResources,
-		ContextPath: filepath.Join("reserve"),
+		ContextPath: "reserve",
 
 		EnvContext: map[string]string{
 			"DOCKER_NETWORK_NAME": config.Docker.Network(),

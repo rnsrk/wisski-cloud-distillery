@@ -1,5 +1,7 @@
+//spellchecker:words malt
 package malt
 
+//spellchecker:words github wisski distillery internal component auth policy docker exporter logger meta sshkeys triplestore
 import (
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/auth/policy"
@@ -11,7 +13,7 @@ import (
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/triplestore"
 )
 
-// Malt is a component passed to every WissKI ingredient
+// Malt is a component passed to every WissKI ingredient.
 type Malt struct {
 	component.Base
 

@@ -1,10 +1,13 @@
+//spellchecker:words admin
 package admin
 
+//spellchecker:words context embed html template http github wisski distillery internal component server assets templating pkglib httpx julienschmidt httprouter
 import (
 	"context"
 	_ "embed"
 	"html/template"
 	"net/http"
+	"net/url"
 
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/server/assets"
@@ -49,11 +52,12 @@ func (admin *Admin) instancePurge(context.Context) http.Handler {
 			return ctx, nil, httpx.ErrNotFound
 		}
 
+		escapedSlug := url.PathEscape(ctx.Instance.Slug)
 		return ctx, []templating.FlagFunc{
-			templating.ReplaceCrumb(menuInstance, component.MenuItem{Title: "Instance", Path: template.URL("/admin/instance/" + ctx.Instance.Slug)}),
-			templating.ReplaceCrumb(menuPurge, component.MenuItem{Title: "Purge", Path: template.URL("/admin/instance/" + ctx.Instance.Slug + "/purge")}),
+			templating.ReplaceCrumb(menuInstance, component.MenuItem{Title: "Instance", Path: template.URL("/admin/instance/" + escapedSlug)}),      // #nosec G203 -- escaped and safe
+			templating.ReplaceCrumb(menuPurge, component.MenuItem{Title: "Purge", Path: template.URL("/admin/instance/" + escapedSlug + "/purge")}), // #nosec G203 -- escaped and safe
 			templating.Title(ctx.Instance.Slug + " - Purge"),
-			admin.instanceTabs(slug, "purge"),
+			admin.instanceTabs(escapedSlug, "purge"),
 		}, nil
 	})
 }

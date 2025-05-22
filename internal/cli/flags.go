@@ -1,22 +1,14 @@
 package cli
 
-import "github.com/rs/zerolog"
+//spellchecker:words github wisski distillery internal wdlog
+import "github.com/FAU-CDI/wisski-distillery/internal/wdlog"
 
-// Flags are global flags for the wdcli executable
+// Flags are global flags for the wdcli executable.
 type Flags struct {
 	//lint:ignore SA5008 required by the argument framework
-	LogLevel   LogLevelString `short:"l" long:"loglevel" description:"log level" default:"info" choice:"trace" choice:"debug" choice:"info" choice:"warn" choice:"error" choice:"fatal" choice:"panic"`
-	ConfigPath string         `short:"c" long:"config" description:"path to distillery configuration file"`
+	//nolint:staticcheck
+	LogLevel   wdlog.Flag `choice:"trace"                                      choice:"debug" choice:"info" choice:"warn" choice:"error" choice:"fatal" choice:"panic" default:"info" description:"log level" long:"loglevel" short:"l"`
+	ConfigPath string     `description:"path to distillery configuration file" long:"config"  short:"c"`
 
-	InternalInDocker bool `long:"internal-in-docker" description:"internal flag to signal the shell that it is running inside a docker stack belonging to the distillery"`
-}
-
-type LogLevelString string
-
-func (ls LogLevelString) Level() zerolog.Level {
-	level, err := zerolog.ParseLevel(string(ls))
-	if err != nil {
-		return zerolog.InfoLevel
-	}
-	return level
+	InternalInDocker bool `description:"internal flag to signal the shell that it is running inside a docker stack belonging to the distillery" long:"internal-in-docker"`
 }

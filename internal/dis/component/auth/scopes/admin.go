@@ -1,6 +1,9 @@
+//spellchecker:words scopes
 package scopes
 
+//spellchecker:words http github wisski distillery internal component auth
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component"
@@ -33,5 +36,8 @@ func (*AdminLoggedIn) Scope() component.ScopeInfo {
 
 func (al *AdminLoggedIn) HasScope(param string, r *http.Request) (bool, error) {
 	_, user, err := al.dependencies.Auth.SessionOf(r)
-	return user != nil && user.IsAdmin() && user.IsTOTPEnabled(), err
+	if err != nil {
+		return false, fmt.Errorf("failed to get session: %w", err)
+	}
+	return user != nil && user.IsAdmin() && user.IsTOTPEnabled(), nil
 }

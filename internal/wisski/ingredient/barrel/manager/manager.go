@@ -1,5 +1,7 @@
+//spellchecker:words manager
 package manager
 
+//spellchecker:words maps slices github wisski distillery internal ingredient barrel composer drush system bookkeeping extras
 import (
 	"maps"
 	"slices"
@@ -30,12 +32,12 @@ type Manager struct {
 	}
 }
 
-// profiles contains the list of default profiles
+// profiles contains the list of default profiles.
 var (
-	defaultProfile = "Drupal 10"
+	defaultProfile = "Drupal 11"
 	profiles       = map[string]Profile{
 		"Drupal 9": {
-			Description: "Legacy Version of Drupal with default packages",
+			Description: "Legacy Version of Drupal",
 
 			Drupal: "^9",
 			WissKI: "",
@@ -54,7 +56,7 @@ var (
 			},
 		},
 		"Drupal 10": {
-			Description: "Current Version of Drupal with default packages",
+			Description: "Legacy Version Of Drupal",
 
 			Drupal: "^10",
 			WissKI: "",
@@ -79,6 +81,25 @@ var (
 				"drupal/geofield_map:^3.0",
 				"drupal/imce:^3.0",
 				"drupal/remove_generator:^2.0",
+			},
+		},
+		"Drupal 11": {
+			Description: "Current Version of Drupal with default packages",
+
+			Drupal: "^11",
+			WissKI: "",
+			InstallModules: []string{
+				"drupal/inline_entity_form:^3.0@RC",
+				"drupal/imagemagick",
+				"drupal/image_effects",
+				"drupal/colorbox",
+			},
+			EnableModules: []string{
+				"drupal/devel:^5.3",
+				"drupal/geofield:^1.64",
+				"drupal/geofield_map:^11.0",
+				"drupal/imce:^3.1",
+				"drupal/remove_generator:^2.1",
 			},
 		},
 	}

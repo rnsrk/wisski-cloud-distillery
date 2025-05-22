@@ -1,23 +1,30 @@
+//spellchecker:words exporter
 package exporter
 
+//spellchecker:words context errors slog path filepath strings time github wisski distillery internal component wdlog logging pkglib umaskfree status golang slices
 import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component"
+	"github.com/FAU-CDI/wisski-distillery/internal/wdlog"
 	"github.com/FAU-CDI/wisski-distillery/internal/wisski"
 
 	"github.com/FAU-CDI/wisski-distillery/pkg/logging"
+	"github.com/tkw1536/pkglib/errorsx"
 	"github.com/tkw1536/pkglib/fsx/umaskfree"
 	"github.com/tkw1536/pkglib/status"
-	"golang.org/x/exp/slices"
 )
 
-// Backup describes a backup
+// Backup describes a backup.
+//
+//nolint:recvcheck
 type Backup struct {
 	Description BackupDescription
 
@@ -42,14 +49,14 @@ type Backup struct {
 	WithManifest
 }
 
-// BackupDescription provides a description for a backup
+// BackupDescription provides a description for a backup.
 type BackupDescription struct {
 	Dest string // Destination path
 
 	ConcurrentSnapshots int // maximum number of concurrent snapshots
 }
 
-// New create a new Backup
+// New create a new Backup.
 func (exporter *Exporter) NewBackup(ctx context.Context, progress io.Writer, description BackupDescription) (backup Backup) {
 	backup.Description = description
 
@@ -59,18 +66,22 @@ func (exporter *Exporter) NewBackup(ctx context.Context, progress io.Writer, des
 	}()
 
 	// do the create keeping track of time!
-	logging.LogOperation(func() error {
+	err := logging.LogOperation(func() error {
 		backup.StartTime = time.Now().UTC()
-		backup.run(ctx, progress, exporter)
+		err := backup.run(ctx, progress, exporter)
 		backup.EndTime = time.Now().UTC()
 
-		return nil
+		return err
 	}, progress, "Writing backup files")
 
-	return
+	if err != nil {
+		wdlog.Of(ctx).Error("failed to create new backup (using possibly incomplete result)", slog.Any("error", err))
+	}
+
+	return backup
 }
 
-func (backup *Backup) run(ctx context.Context, progress io.Writer, exporter *Exporter) {
+func (backup *Backup) run(ctx context.Context, progress io.Writer, exporter *Exporter) error {
 	// create a manifest
 	manifest, done := backup.handleManifest(backup.Description.Dest)
 	defer done()
@@ -80,7 +91,7 @@ func (backup *Backup) run(ctx context.Context, progress io.Writer, exporter *Exp
 	backup.ComponentErrors = make(map[string]error, len(backups))
 
 	// Component backup tasks
-	logging.LogOperation(func() error {
+	err1 := logging.LogOperation(func() error {
 		st := status.NewWithCompat(progress, 0)
 		st.Start()
 		defer st.Stop()
@@ -113,7 +124,7 @@ func (backup *Backup) run(ctx context.Context, progress io.Writer, exporter *Exp
 	}, progress, "Backing up core components")
 
 	// backup instances
-	logging.LogOperation(func() error {
+	err2 := logging.LogOperation(func() error {
 		st := status.NewWithCompat(progress, 0)
 		st.Start()
 		defer st.Stop()
@@ -167,4 +178,5 @@ func (backup *Backup) run(ctx context.Context, progress io.Writer, exporter *Exp
 		return nil
 	}, progress, "Creating instance snapshots")
 
+	return errorsx.Combine(err1, err2)
 }

@@ -1,5 +1,7 @@
+//spellchecker:words users
 package users
 
+//spellchecker:words context errors github wisski distillery internal passwordx phpx pkglib password
 import (
 	"context"
 	"errors"
@@ -8,6 +10,7 @@ import (
 
 	"github.com/FAU-CDI/wisski-distillery/internal/passwordx"
 	"github.com/FAU-CDI/wisski-distillery/internal/phpx"
+	"github.com/tkw1536/pkglib/errorsx"
 	"github.com/tkw1536/pkglib/password"
 )
 
@@ -19,12 +22,19 @@ func (u *Users) GetPasswordValidator(ctx context.Context, username string) (pv P
 	var hash string
 	err = u.dependencies.PHP.ExecScript(ctx, server, &hash, usersPHP, "get_password_hash", username)
 	if err != nil {
-		server.Close()
+		if e2 := server.Close(); e2 != nil {
+			err = errors.Join(
+				fmt.Errorf("failed to get password hash: %w", err),
+				fmt.Errorf("failed to close server: %w", err),
+			)
+		}
 		return pv, err
 	}
 	if len(hash) == 0 {
-		server.Close()
-		return pv, errGetValidator
+		return pv, errorsx.Combine(
+			errGetValidator,
+			server.Close(),
+		)
 	}
 
 	pv.server = server
@@ -41,12 +51,15 @@ type PasswordValidator struct {
 }
 
 func (pv PasswordValidator) Close() error {
-	return pv.server.Close()
+	if err := pv.server.Close(); err != nil {
+		return fmt.Errorf("failed to close php server: %w", err)
+	}
+	return nil
 }
 
 func (pv PasswordValidator) Check(ctx context.Context, password string) bool {
 	var result phpx.Boolean
-	err := pv.server.MarshalCall(ctx, &result, "check_password_hash", password, string(pv.hash))
+	err := pv.server.MarshalCall(ctx, &result, "check_password_hash", password, pv.hash)
 	if err != nil {
 		return false
 	}
@@ -61,7 +74,9 @@ func (pv PasswordValidator) CheckDictionary(ctx context.Context, writer io.Write
 	if pv.Check(ctx, pv.username) {
 		if writer != nil {
 			counter++
-			fmt.Fprintln(writer, counter)
+			if _, err := fmt.Fprintln(writer, counter); err != nil {
+				return fmt.Errorf("unable to report progress: %w", err)
+			}
 		}
 		return errPasswordUsername
 	}
@@ -72,7 +87,9 @@ func (pv PasswordValidator) CheckDictionary(ctx context.Context, writer io.Write
 		result := pv.Check(ctx, candidate.Password)
 		if writer != nil {
 			counter++
-			fmt.Fprintln(writer, counter)
+			if _, err := fmt.Fprintln(writer, counter); err != nil {
+				return fmt.Errorf("unable to report progress: %w", err)
+			}
 		}
 
 		if result {
@@ -80,5 +97,9 @@ func (pv PasswordValidator) CheckDictionary(ctx context.Context, writer io.Write
 		}
 	}
 
-	return ctx.Err()
+	err := ctx.Err()
+	if err != nil {
+		return fmt.Errorf("context closed before returning: %w", err)
+	}
+	return nil
 }

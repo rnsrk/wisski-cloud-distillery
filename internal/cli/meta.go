@@ -1,7 +1,9 @@
 package cli
 
+//spellchecker:words errors user path filepath strings github wisski distillery internal bootstrap pkglib umaskfree
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"os/user"
@@ -18,12 +20,12 @@ import (
 // It should contain the path to a deployment directory.
 const metaConfigFile = "." + bootstrap.Executable
 
-// MetaConfigPath returns the full path to the MetaConfigPath()
+// MetaConfigPath returns the full path to the MetaConfigPath().
 func MetaConfigPath() (string, error) {
 	// find the current user
 	usr, err := user.Current()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to get current user: %w", err)
 	}
 	return filepath.Join(usr.HomeDir, metaConfigFile), nil
 }
@@ -42,9 +44,9 @@ func ReadBaseDirectory() (value string, err error) {
 	}
 
 	// read the meta config file!
-	contents, err := os.ReadFile(path)
+	contents, err := os.ReadFile(path) // #nosec G304 -- intended
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to read meta config file: %w", err)
 	}
 
 	// and trim the spaces!
@@ -59,7 +61,7 @@ func ReadBaseDirectory() (value string, err error) {
 	return value, nil
 }
 
-// WriteBaseDirectory writes the base directory to the environment, or returns an error
+// WriteBaseDirectory writes the base directory to the environment, or returns an error.
 func WriteBaseDirectory(dir string) error {
 	// get the path!
 	path, err := MetaConfigPath()
@@ -68,5 +70,8 @@ func WriteBaseDirectory(dir string) error {
 	}
 
 	// just put the directory inside it!
-	return umaskfree.WriteFile(path, []byte(dir), fs.ModePerm)
+	if err := umaskfree.WriteFile(path, []byte(dir), fs.ModePerm); err != nil {
+		return fmt.Errorf("failed to create base directory: %w", err)
+	}
+	return nil
 }

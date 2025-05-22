@@ -1,5 +1,7 @@
+//spellchecker:words models
 package models
 
+//spellchecker:words database driver errors time
 import (
 	"database/sql/driver"
 	"errors"
@@ -52,7 +54,9 @@ func (i Instance) IsBlindUpdateEnabled() bool {
 	return bool(i.AutoBlindUpdateEnabled)
 }
 
-// SQLBit1 implements a boolean as a BIT(1)
+// SQLBit1 implements a boolean as a BIT(1).
+//
+//nolint:recvcheck
 type SQLBit1 bool
 
 func (sb SQLBit1) Value() (driver.Value, error) {

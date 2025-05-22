@@ -1,5 +1,6 @@
 package sql
 
+//spellchecker:words context database time gorm driver mysql logger github wisski distillery internal component models pkglib timex
 import (
 	"context"
 	"database/sql"
@@ -31,7 +32,7 @@ func (sql *SQL) Exec(query string, args ...interface{}) error {
 	{
 		_, err := conn.Exec(query, args...)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to execute query: %w", err)
 		}
 		return nil
 	}
@@ -41,12 +42,12 @@ func (sql *SQL) Exec(query string, args ...interface{}) error {
 // ========== connection via gorm ==========
 //
 
-// QueryTable returns a gorm.DB to connect to the provided table of the given model
+// QueryTable returns a gorm.DB to connect to the provided table of the given model.
 func (sql *SQL) QueryTable(ctx context.Context, table component.Table) (*gorm.DB, error) {
 	return sql.queryTable(ctx, false, table.TableInfo().Name)
 }
 
-// queryTable returns a gorm.DB to connect to the provided distillery database table
+// queryTable returns a gorm.DB to connect to the provided distillery database table.
 func (sql *SQL) queryTable(ctx context.Context, silent bool, table string) (*gorm.DB, error) {
 	conn, err := sql.connect(component.GetStill(sql).Config.SQL.Database)
 	if err != nil {
@@ -73,7 +74,7 @@ func (sql *SQL) queryTable(ctx context.Context, silent bool, table string) (*gor
 	// open the gorm connection!
 	db, err := gorm.Open(mysql.New(cfg), config)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to connect with gorm: %w", err)
 	}
 
 	// set the table
@@ -86,14 +87,17 @@ func (sql *SQL) queryTable(ctx context.Context, silent bool, table string) (*gor
 	return db, nil
 }
 
-// WaitQueryTable waits for a connection to succeed via QueryTable
+// WaitQueryTable waits for a connection to succeed via QueryTable.
 func (sql *SQL) WaitQueryTable(ctx context.Context) error {
 	// TODO: Establish a convention on when to wait for this!
-	return timex.TickUntilFunc(func(time.Time) bool {
+	if err := timex.TickUntilFunc(func(time.Time) bool {
 		// TODO: Use a different table here
 		_, err := sql.queryTable(ctx, true, models.InstanceTable)
 		return err == nil
-	}, ctx, sql.PollInterval)
+	}, ctx, sql.PollInterval); err != nil {
+		return fmt.Errorf("failed to wait for connection: %w", err)
+	}
+	return nil
 }
 
 //
@@ -103,7 +107,7 @@ func (sql *SQL) WaitQueryTable(ctx context.Context) error {
 func (ssql *SQL) connect(database string) (*sql.DB, error) {
 	conn, err := sql.Open("mysql", ssql.dsn(database))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to connect to sql: %w", err)
 	}
 
 	conn.SetMaxIdleConns(0)
@@ -111,7 +115,7 @@ func (ssql *SQL) connect(database string) (*sql.DB, error) {
 	return conn, nil
 }
 
-// dsn returns a dsn fof connecting to the database
+// dsn returns a dsn fof connecting to the database.
 func (sql *SQL) dsn(database string) string {
 	config := component.GetStill(sql).Config.SQL
 	user := config.AdminUsername

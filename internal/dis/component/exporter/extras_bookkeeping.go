@@ -1,5 +1,7 @@
+//spellchecker:words exporter
 package exporter
 
+//spellchecker:words context github wisski distillery internal component models
 import (
 	"context"
 	"fmt"
@@ -9,6 +11,7 @@ import (
 	"github.com/FAU-CDI/wisski-distillery/internal/models"
 )
 
+//nolint:recvcheck
 type Bookkeeping struct {
 	component.Base
 }
@@ -23,10 +26,16 @@ func (Bookkeeping) SnapshotNeedsRunning() bool { return false }
 // SnapshotName returns a new name to be used as an argument for path.
 func (Bookkeeping) SnapshotName() string { return "bookkeeping.txt" }
 
-// Snapshot creates a snapshot of this instance
+// Snapshot creates a snapshot of this instance.
 func (*Bookkeeping) Snapshot(wisski models.Instance, scontext *component.StagingContext) error {
-	return scontext.AddFile(".", func(ctx context.Context, file io.Writer) error {
+	if err := scontext.AddFile(".", func(ctx context.Context, file io.Writer) error {
 		_, err := fmt.Fprintf(file, "%#v\n", wisski)
-		return err
-	})
+		if err != nil {
+			return fmt.Errorf("failed to write bookkeeping file: %w", err)
+		}
+		return nil
+	}); err != nil {
+		return fmt.Errorf("failed to copy file: %w", err)
+	}
+	return nil
 }

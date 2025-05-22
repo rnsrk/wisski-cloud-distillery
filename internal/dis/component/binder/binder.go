@@ -1,7 +1,10 @@
+//spellchecker:words binder
 package binder
 
+//spellchecker:words embed path filepath github wisski distillery internal component pkglib yamlx gopkg yaml
 import (
 	"embed"
+	"fmt"
 	"path/filepath"
 
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component"
@@ -36,15 +39,14 @@ func (binder *Binder) Stack() component.StackWithResources {
 		Resources:   composeTemplate,
 
 		ComposerYML: func(root *yaml.Node) (*yaml.Node, error) {
-
 			ports := config.Listen.ComposePorts("8000")
 			if err := yamlx.ReplaceWith(root, ports, "services", "binder", "ports"); err != nil {
-				return nil, err
+				return nil, fmt.Errorf("failed to set compose ports: %w", err)
 			}
 
 			command := config.HTTP.TCPMuxCommand("0.0.0.0:8000", "http:80", "http:443", "ssh:2222")
 			if err := yamlx.ReplaceWith(root, command, "services", "binder", "command"); err != nil {
-				return nil, err
+				return nil, fmt.Errorf("failed to set binder command: %w", err)
 			}
 
 			return root, nil

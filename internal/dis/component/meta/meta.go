@@ -1,5 +1,7 @@
+//spellchecker:words meta
 package meta
 
+//spellchecker:words reflect sync github wisski distillery internal component models
 import (
 	"reflect"
 	"sync"
@@ -9,7 +11,7 @@ import (
 	"github.com/FAU-CDI/wisski-distillery/internal/models"
 )
 
-// Component meta is responsible for managing metadata per WissKI Instance
+// Component meta is responsible for managing metadata per WissKI Instance.
 type Meta struct {
 	component.Base
 	dependencies struct {

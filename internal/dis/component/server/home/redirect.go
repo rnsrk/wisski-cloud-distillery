@@ -1,16 +1,20 @@
+//spellchecker:words home
 package home
 
+//spellchecker:words context encoding json http strings github wisski distillery internal component
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"strings"
 
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component"
+	"github.com/tkw1536/pkglib/errorsx"
 )
 
-func (home *Home) loadRedirect(context.Context) (redirect Redirect, err error) {
+func (home *Home) loadRedirect(context.Context) (redirect Redirect, e error) {
 	if redirect.Overrides == nil {
 		redirect.Overrides = make(map[string]string)
 	}
@@ -23,13 +27,13 @@ func (home *Home) loadRedirect(context.Context) (redirect Redirect, err error) {
 	// load the overrides file
 	overrides, err := os.Open(component.GetStill(home).Config.Paths.OverridesJSON)
 	if err != nil {
-		return redirect, err
+		return redirect, fmt.Errorf("failed to open overrides file: %w", err)
 	}
-	defer overrides.Close()
+	defer errorsx.Close(overrides, &e, "overrides file")
 
 	// decode the overrides file
 	if err := json.NewDecoder(overrides).Decode(&redirect.Overrides); err != nil {
-		return redirect, err
+		return redirect, fmt.Errorf("failed to parse overrides files: %w", err)
 	}
 
 	// and return!

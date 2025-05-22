@@ -1,29 +1,37 @@
+//spellchecker:words triplestore
 package triplestore
 
+//spellchecker:words context http github wisski distillery internal component logging errors
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component"
 	"github.com/FAU-CDI/wisski-distillery/pkg/logging"
-	"github.com/pkg/errors"
+	"github.com/tkw1536/pkglib/errorsx"
 )
 
 var errTriplestoreFailedSecurity = errors.New("failed to enable triplestore security: request did not succeed with HTTP 200 OK")
 
-func (ts *Triplestore) Update(ctx context.Context, progress io.Writer) error {
-	logging.LogMessage(progress, "Waiting for Triplestore")
+func (ts *Triplestore) Update(ctx context.Context, progress io.Writer) (e error) {
+	if _, err := logging.LogMessage(progress, "Waiting for Triplestore"); err != nil {
+		return fmt.Errorf("failed to log message: %w", err)
+	}
 	if err := ts.Wait(ctx); err != nil {
-		return err
+		return fmt.Errorf("failed to wait: %w", err)
 	}
 
-	logging.LogMessage(progress, "Resetting admin user password")
+	if _, err := logging.LogMessage(progress, "Resetting admin user password"); err != nil {
+		return fmt.Errorf("failed to log message: %w", err)
+	}
 	{
 		config := component.GetStill(ts).Config.TS
 
-		res, err := ts.DoRestWithMarshal(ctx, tsTrivialTimeout, http.MethodPut, "/rest/security/users/"+config.AdminUsername, nil, TriplestoreUserPayload{
+		res, err := ts.DoRestWithMarshal(ctx, tsTrivialTimeout, http.MethodPut, "/rest/security/users/"+url.PathEscape(config.AdminUsername), nil, TriplestoreUserPayload{
 			Password: config.AdminPassword,
 			AppSettings: TriplestoreUserAppSettings{
 				DefaultInference:      true,
@@ -35,9 +43,9 @@ func (ts *Triplestore) Update(ctx context.Context, progress io.Writer) error {
 			GrantedAuthorities: []string{"ROLE_ADMIN"},
 		})
 		if err != nil {
-			return fmt.Errorf("failed to create triplestore user: %s", err)
+			return fmt.Errorf("failed to create triplestore user: %w", err)
 		}
-		defer res.Body.Close()
+		defer errorsx.Close(res.Body, &e, "response body")
 
 		switch res.StatusCode {
 		case http.StatusOK:
@@ -46,20 +54,24 @@ func (ts *Triplestore) Update(ctx context.Context, progress io.Writer) error {
 		case http.StatusUnauthorized:
 			// a password is needed => security is already enabled.
 			// the password may or may not work, but that's a problem for later
-			logging.LogMessage(progress, "Security is already enabled")
+			if _, err := logging.LogMessage(progress, "Security is already enabled"); err != nil {
+				return fmt.Errorf("failed to log message: %w", err)
+			}
 			return nil
 		default:
-			return fmt.Errorf("failed to create triplestore user: %s", err)
+			return fmt.Errorf("failed to create triplestore user: %w", err)
 		}
 	}
 
-	logging.LogMessage(progress, "Enabling Triplestore security")
+	if _, err := logging.LogMessage(progress, "Enabling Triplestore security"); err != nil {
+		return fmt.Errorf("failed to log message: %w", err)
+	}
 	{
 		res, err := ts.DoRestWithMarshal(ctx, tsTrivialTimeout, http.MethodPost, "/rest/security", nil, true)
 		if err != nil {
-			return fmt.Errorf("failed to enable triplestore security: %s", err)
+			return fmt.Errorf("failed to enable triplestore security: %w", err)
 		}
-		defer res.Body.Close()
+		defer errorsx.Close(res.Body, &e, "response body")
 
 		if res.StatusCode != http.StatusOK {
 			return errTriplestoreFailedSecurity

@@ -1,5 +1,7 @@
+//spellchecker:words solr
 package solr
 
+//spellchecker:words embed path filepath time github wisski distillery internal component
 import (
 	"embed"
 	"path/filepath"
@@ -41,7 +43,7 @@ func (solr *Solr) Stack() component.StackWithResources {
 		},
 
 		MakeDirs: []string{
-			filepath.Join("data"),
+			"data",
 		},
 	})
 }

@@ -1,15 +1,20 @@
+//spellchecker:words auth
 package auth
 
+//spellchecker:words context errors html template slog http github wisski distillery internal component server assets templating wdlog pkglib httpx form field gorilla sessions embed
 import (
 	"context"
 	"errors"
+	"fmt"
 	"html/template"
+	"log/slog"
 	"net/http"
 
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/server"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/server/assets"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/server/templating"
+	"github.com/FAU-CDI/wisski-distillery/internal/wdlog"
 	"github.com/tkw1536/pkglib/httpx/form"
 	"github.com/tkw1536/pkglib/httpx/form/field"
 
@@ -54,7 +59,7 @@ func (auth *Auth) UserOfToken(r *http.Request) (user *AuthUser, err error) {
 	// get the token object
 	token, err := auth.dependencies.Tokens.TokenOf(r)
 	if token == nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get token for request: %w", err)
 	}
 	return auth.checkUser(r.Context(), token.User)
 }
@@ -87,7 +92,7 @@ func (auth *Auth) UserOfSession(r *http.Request) (user *AuthUser, err error) {
 func (auth *Auth) checkUser(ctx context.Context, name string) (user *AuthUser, err error) {
 	// fetch the user, check if they still exist
 	user, err = auth.User(ctx, name)
-	if err == ErrUserNotFound {
+	if errors.Is(err, ErrUserNotFound) {
 		return nil, nil
 	}
 	if err != nil {
@@ -106,13 +111,24 @@ func (auth *Auth) checkUser(ctx context.Context, name string) (user *AuthUser, e
 // session returns the session that belongs to a given request.
 // If the session is not set, creates a new session.
 func (auth *Auth) session(r *http.Request) (*sessions.Session, error) {
-	return auth.store.Get(func() sessions.Store {
-		return sessions.NewCookieStore([]byte(component.GetStill(auth).Config.SessionSecret))
+	sess, err := auth.store.Get(func() sessions.Store {
+		config := component.GetStill(auth).Config
+
+		cookiestore := sessions.NewCookieStore(config.SessionKey())
+		cookiestore.Options.Path = "/"
+		cookiestore.Options.HttpOnly = true
+		cookiestore.Options.Secure = config.HTTP.HTTPSEnabled()
+		cookiestore.Options.SameSite = http.SameSiteStrictMode
+
+		return cookiestore
 	}).Get(r, server.SessionCookie)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get session: %w", err)
+	}
+	return sess, nil
 }
 
 func (auth *Auth) Menu(r *http.Request) []component.MenuItem {
-
 	user, err := auth.UserOfSession(r)
 	if user == nil || err != nil {
 		return nil
@@ -124,7 +140,6 @@ func (auth *Auth) Menu(r *http.Request) []component.MenuItem {
 			Priority: component.MenuAuth,
 		},
 	}
-
 }
 
 type contextUserKey struct{}
@@ -143,7 +158,10 @@ func (auth *Auth) Login(w http.ResponseWriter, r *http.Request, user *AuthUser) 
 		return err
 	}
 	sess.Values[server.SessionUserKey] = user.User.User
-	return sess.Save(r, w)
+	if err := sess.Save(r, w); err != nil {
+		return fmt.Errorf("failed to save session: %w", err)
+	}
+	return nil
 }
 
 // Logout logs out the user from the given session.
@@ -156,7 +174,10 @@ func (auth *Auth) Logout(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	sess.Options.MaxAge = -1
-	return sess.Save(r, w)
+	if err := sess.Save(r, w); err != nil {
+		return fmt.Errorf("failed to save session: %w", err)
+	}
+	return nil
 }
 
 //go:embed "login.html"
@@ -170,13 +191,13 @@ var loginTemplate = templating.ParseForm(
 
 var errLoginFailed = errors.New("login failed")
 
-// authLogin implements a view to login a user
+// authLogin implements a view to login a user.
 func (auth *Auth) authLogin(ctx context.Context) http.Handler {
 	tpl := loginTemplate.Prepare(
 		auth.dependencies.Templating,
 		func(flags templating.Flags, r *http.Request) templating.Flags {
 			flags.Crumbs = []component.MenuItem{
-				{Title: "Login", Path: template.URL(r.URL.RequestURI())},
+				{Title: "Login", Path: template.URL(r.URL.RequestURI())}, // #nosec G203 -- request URI assumed to be safe
 			}
 			return flags
 		},
@@ -240,11 +261,13 @@ func (auth *Auth) authLogin(ctx context.Context) http.Handler {
 	}
 }
 
-// authLogout implements the authLogout view to logout a user
-func (auth *Auth) authLogout(context.Context) http.Handler {
+// authLogout implements the authLogout view to logout a user.
+func (auth *Auth) authLogout(ctx context.Context) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// do the logout
-		auth.Logout(w, r)
+		if err := auth.Logout(w, r); err != nil {
+			wdlog.Of(ctx).Error("failed to logout user", slog.Any("err", err))
+		}
 
 		// get the destination
 		next := r.URL.Query().Get("next")

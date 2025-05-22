@@ -1,6 +1,9 @@
+//spellchecker:words compose
 package compose
 
+//spellchecker:words path filepath github compose spec loader types
 import (
+	"fmt"
 	"path/filepath"
 
 	"github.com/compose-spec/compose-go/cli"
@@ -8,7 +11,7 @@ import (
 	"github.com/compose-spec/compose-go/types"
 )
 
-// ComposeProject represents a compose project
+// ComposeProject represents a compose project.
 type Project = *types.Project
 
 // Open loads a docker compose project from the given path.
@@ -20,7 +23,7 @@ type Project = *types.Project
 func Open(path string) (project Project, err error) {
 	ppath, err := filepath.Abs(path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to open project path: %w", err)
 	}
 
 	opts, err := cli.NewProjectOptions(
@@ -31,12 +34,12 @@ func Open(path string) (project Project, err error) {
 		cli.WithDotEnv,
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create project options: %w", err)
 	}
 
 	proj, err := cli.ProjectFromOptions(opts)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create compose project: %w", err)
 	}
 
 	return proj, nil

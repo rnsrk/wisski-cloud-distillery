@@ -1,16 +1,19 @@
+//spellchecker:words status
 package status
 
+//spellchecker:words encoding json strings time github wisski distillery internal phpx golang slices
 import (
 	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
+	"slices"
+
 	"github.com/FAU-CDI/wisski-distillery/internal/phpx"
-	"golang.org/x/exp/slices"
 )
 
-// DrupalUser represents a WissKI DrupalUser
+// DrupalUser represents a WissKI DrupalUser.
 type DrupalUser struct {
 	UID     phpx.Integer   `json:"uid,omitempty"`
 	Name    phpx.String    `json:"name,omitempty"`
@@ -58,7 +61,7 @@ func (du DrupalUser) String() string {
 	return builder.String()
 }
 
-// UserRole represents the role of a user
+// UserRole represents the role of a user.
 type UserRole string
 
 const (
@@ -66,14 +69,16 @@ const (
 	ContentEditor UserRole = "content_editor"
 )
 
-// UserRoles represents a set of user roles for a given user
+// UserRoles represents a set of user roles for a given user.
+//
+//nolint:recvcheck
 type UserRoles map[UserRole]struct{}
 
 func (ur UserRoles) String() string {
 	return "[" + ur.string() + "]"
 }
 
-// String turns this UserRoles into a string
+// String turns this UserRoles into a string.
 func (ur UserRoles) string() string {
 	roles := make([]string, len(ur))
 	i := 0
@@ -86,17 +91,21 @@ func (ur UserRoles) string() string {
 }
 
 func (ur UserRoles) MarshalJSON() ([]byte, error) {
-	return json.Marshal(ur.string())
+	bytes, err := json.Marshal(ur.string())
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal string: %w", err)
+	}
+	return bytes, nil
 }
 
-// Has checks if the UserRole has the given role
+// Has checks if the UserRole has the given role.
 func (ur UserRoles) Has(role UserRole) (ok bool) {
 	_, ok = ur[role]
 	return
 }
 
 func (u *UserRoles) UnmarshalJSON(data []byte) error {
-	return phpx.UnmarshalIntermediate(u, func(s phpx.String) (UserRoles, error) {
+	if err := phpx.UnmarshalIntermediate(u, func(s phpx.String) (UserRoles, error) {
 		if len(s) == 0 {
 			return nil, nil
 		}
@@ -106,5 +115,8 @@ func (u *UserRoles) UnmarshalJSON(data []byte) error {
 			uroles[UserRole(r)] = struct{}{}
 		}
 		return uroles, nil
-	}, data)
+	}, data); err != nil {
+		return fmt.Errorf("failed to unmarshal user roles: %w", err)
+	}
+	return nil
 }

@@ -1,7 +1,10 @@
+//spellchecker:words phpx
 package phpx
 
+//spellchecker:words encoding json math strconv strings github pkglib collection
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 	"strconv"
 	"strings"
@@ -14,36 +17,19 @@ import (
 // Typically data is marshaled using [json.Marshal] and decoded in PHP using 'json_decode'.
 // Special cases may exist for specific datatypes.
 func Marshal(data any) (string, error) {
-	switch d := data.(type) {
-	case string:
-		return MarshalString(d), nil
+	if str, ok := data.(string); ok {
+		return MarshalString(str), nil
 	}
 
 	bytes, err := json.Marshal(data)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to marshal data: %w", err)
 	}
 
 	return "json_decode(" + MarshalString(string(bytes)) + ")", nil
 }
 
-// MarshalJSON marshals a json-value safely as an expression to be used as a php string.
-//
-// A json value is one returned by calling [json.Unmarshal] on a value of type any.
-// These are then marshaled by the appropriate function:
-//
-// - a nil is turned into [PHPNil]
-// - a bool is passed to [MarshalBool]
-// - a float64 is passed to [MarshalFloat]
-// - a string is passed to [MarshalString]
-// - an []any is passed to [MarshalSlice]
-// - an map[string]any is passed to [MarshalMap]
-//
-// All marshaling attempts to minify the length of the returned string, meaning compact encodings
-// are prefered over length ones.
-//
-// If a value is none of these types, an empty string is returned.
-// No valid value ever returns the empty string
+// No valid value ever returns the empty string.
 func MarshalJSON(v any) string {
 	switch v := v.(type) {
 	case nil:
@@ -63,7 +49,7 @@ func MarshalJSON(v any) string {
 }
 
 const (
-	// PHPNil represents the equivalent of a nil value in php
+	// PHPNil represents the equivalent of a nil value in php.
 	PHPNil = "null"
 
 	phpTrue  = "!0"
@@ -83,7 +69,7 @@ func MarshalBool(b bool) string {
 	return phpFalse
 }
 
-// MarshalFloat marshals a floating point number or integer
+// MarshalFloat marshals a floating point number or integer.
 func MarshalFloat(f float64) string {
 	// if we actually have an integer, return it!
 	if i := int64(f); f == float64(i) {
@@ -105,7 +91,7 @@ func MarshalFloat(f float64) string {
 	return strconv.FormatFloat(f, 'E', -1, 64)
 }
 
-// MarshalInt marshals an integer as a string to be used inside a php literal
+// MarshalInt marshals an integer as a string to be used inside a php literal.
 func MarshalInt(i int64) string {
 	return strconv.FormatInt(i, 10)
 }
@@ -115,7 +101,6 @@ var stringReplacer = strings.NewReplacer("'", "\\'", "\\", "\\\\")
 // MarshalString marshals s as a php string that can be used safely as a PHP expression.
 func MarshalString(s string) string {
 	// See [https://www.php.net/manual/en/language.types.string.php#language.types.string.syntax.single]
-	// we just escape
 	return "'" + stringReplacer.Replace(s) + "'"
 }
 
@@ -138,13 +123,12 @@ func MarshalMap(m map[string]any) string {
 	var builder strings.Builder
 
 	builder.WriteString("array(")
-	collection.IterateSorted(m, func(k string, v any) bool {
+	for k, v := range collection.IterSorted(m) {
 		builder.WriteString(MarshalString(k))
 		builder.WriteString("=>")
 		builder.WriteString(MarshalJSON(v))
 		builder.WriteString(",")
-		return true
-	})
+	}
 	builder.WriteString(")")
 
 	return builder.String()

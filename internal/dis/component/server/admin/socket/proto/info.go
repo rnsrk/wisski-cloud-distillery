@@ -1,5 +1,7 @@
+//spellchecker:words proto
 package proto
 
+//spellchecker:words context github wisski distillery internal component auth scopes
 import (
 	"context"
 	"io"
@@ -8,7 +10,7 @@ import (
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/auth/scopes"
 )
 
-// Action is anything that can be retrieved from a
+// Action is anything that can be retrieved from a.
 type Action struct {
 	// NumPara
 	NumParams int
@@ -26,8 +28,7 @@ type Action struct {
 	Handle func(ctx context.Context, in io.Reader, out io.Writer, params ...string) error
 }
 
-// scope returns the actual scope required by this action.
-// If the caller did not provide an actual scope, uses ScopeNever
+// If the caller did not provide an actual scope, uses ScopeNever.
 func (action Action) scope() component.Scope {
 	if action.Scope == "" {
 		return scopes.ScopeNever

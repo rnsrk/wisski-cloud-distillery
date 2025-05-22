@@ -1,5 +1,7 @@
+//spellchecker:words component
 package component
 
+//spellchecker:words encoding json http github wisski distillery internal models
 import (
 	"encoding/json"
 	"fmt"
@@ -41,8 +43,8 @@ type AccessDeniedError string
 
 func (aed AccessDeniedError) Error() string { return string(aed) }
 
-// DeniedError returns an AccessDeniedError that indivates the access is denied.
-func (scope ScopeInfo) DeniedError() error {
+// DeniedError returns an AccessDeniedError that indicates the access is denied.
+func (scope ScopeInfo) DeniedError() AccessDeniedError {
 	if scope.DeniedMessage == "" {
 		return AccessDeniedError(fmt.Sprintf("missing scope %q", string(scope.Scope)))
 	}
@@ -50,11 +52,11 @@ func (scope ScopeInfo) DeniedError() error {
 }
 
 // CheckError returns a CheckError with the given underlying error.
-func (scope ScopeInfo) CheckError(err error) error {
+func (scope ScopeInfo) CheckError(err error) CheckError {
 	return CheckError{Scope: scope.Scope, Err: err}
 }
 
-// ScopeProvider is a component that can check a specific scope
+// ScopeProvider is a component that can check a specific scope.
 type ScopeProvider interface {
 	Component
 
@@ -75,13 +77,17 @@ type SessionInfo struct {
 }
 
 func (si SessionInfo) MarshalJSON() ([]byte, error) {
-	return json.Marshal(struct {
+	bytes, err := json.Marshal(struct {
 		User  string `json:"user"`
 		Token bool   `json:"token"`
 	}{User: si.Username(), Token: si.Token})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal json: %w", err)
+	}
+	return bytes, nil
 }
 
-// Username reports the username associated with this session
+// Username reports the username associated with this session.
 func (si SessionInfo) Username() string {
 	if si.User == nil {
 		return ""
@@ -89,7 +95,7 @@ func (si SessionInfo) Username() string {
 	return si.User.User
 }
 
-// Anonymous reports if this Session is associated with a user account
+// Anonymous reports if this Session is associated with a user account.
 func (si SessionInfo) Anonymous() bool {
 	return si.Username() != ""
 }

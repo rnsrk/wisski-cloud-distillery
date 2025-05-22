@@ -1,6 +1,9 @@
 // Package component holds the main abstraction for components.
+//
+//spellchecker:words component
 package component
 
+//spellchecker:words reflect strconv strings github wisski distillery internal config
 import (
 	"net"
 	"reflect"
@@ -30,7 +33,9 @@ type Component interface {
 	getBase() *Base
 }
 
-// Base is embedded into every Component
+// Base is embedded into every Component.
+//
+//nolint:recvcheck
 type Base struct {
 	name, id string // name and id of this component
 	still    Still  // the underlying still of the distillery

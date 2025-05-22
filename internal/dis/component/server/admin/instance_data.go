@@ -1,15 +1,20 @@
+//spellchecker:words admin
 package admin
 
+//spellchecker:words context embed html template http github wisski distillery internal component server assets templating pkglib httpx julienschmidt httprouter
 import (
 	"context"
 	_ "embed"
+	"fmt"
 	"html/template"
 	"net/http"
+	"net/url"
 
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/server/assets"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/server/templating"
 	"github.com/FAU-CDI/wisski-distillery/internal/wisski"
+	"github.com/tkw1536/pkglib/errorsx"
 	"github.com/tkw1536/pkglib/httpx"
 
 	"github.com/julienschmidt/httprouter"
@@ -53,25 +58,26 @@ func (admin *Admin) instanceData(context.Context) http.Handler {
 		}
 
 		server := ctx.Instance.PHP().NewServer()
-		defer server.Close()
+		defer errorsx.Close(server, &err, "server")
 
 		ctx.Pathbuilders, err = ctx.Instance.Pathbuilder().GetAll(r.Context(), server)
 		if err != nil {
-			return ctx, nil, err
+			return ctx, nil, fmt.Errorf("failed to get pathbuilders: %w", err)
 		}
 
 		prefixes := ctx.Instance.Prefixes()
 		ctx.NoPrefixes = prefixes.NoPrefix()
 		ctx.Prefixes, err = prefixes.All(r.Context(), server)
 		if err != nil {
-			return ctx, nil, err
+			return ctx, nil, fmt.Errorf("failed to get prefixes: %w", err)
 		}
 
+		escapedSlug := url.PathEscape(ctx.Instance.Slug)
 		return ctx, []templating.FlagFunc{
-			templating.ReplaceCrumb(menuInstance, component.MenuItem{Title: "Instance", Path: template.URL("/admin/instance/" + ctx.Instance.Slug)}),
-			templating.ReplaceCrumb(menuData, component.MenuItem{Title: "SSH", Path: template.URL("/admin/instance/" + ctx.Instance.Slug + "/data")}),
+			templating.ReplaceCrumb(menuInstance, component.MenuItem{Title: "Instance", Path: template.URL("/admin/instance/" + escapedSlug)}),  // #nosec G203 -- escaped and safe
+			templating.ReplaceCrumb(menuData, component.MenuItem{Title: "SSH", Path: template.URL("/admin/instance/" + escapedSlug + "/data")}), // #nosec G203 -- escaped and safe
 			templating.Title(ctx.Instance.Slug + " - Data"),
-			admin.instanceTabs(slug, "data"),
+			admin.instanceTabs(escapedSlug, "data"),
 		}, nil
 	})
 }

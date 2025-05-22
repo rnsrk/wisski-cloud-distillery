@@ -1,12 +1,17 @@
+//spellchecker:words validators
 package validators
 
+// TODO: Figure out if there is an existing package for this!
+
+//spellchecker:words strconv gopkg yaml
 import (
+	"fmt"
 	"strconv"
 
 	"gopkg.in/yaml.v3"
 )
 
-// NullableBool represents a bool that can be null
+// NullableBool represents a bool that can be null.
 type NullableBool struct {
 	Set, Value bool
 }
@@ -32,7 +37,7 @@ func ValidateBool(value *NullableBool, dflt string) (err error) {
 	if !value.Set {
 		res, err := strconv.ParseBool(dflt)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to parse boolean: %w", err)
 		}
 		value.Set = true
 		value.Value = res

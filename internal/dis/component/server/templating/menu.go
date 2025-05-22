@@ -1,19 +1,20 @@
+//spellchecker:words templating
 package templating
 
+//spellchecker:words html template http github wisski distillery internal component pkglib httpx golang slices
 import (
 	"html/template"
 	"net/http"
+	"slices"
 
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component"
 	"github.com/tkw1536/pkglib/httpx/mux"
-	"golang.org/x/exp/slices"
 )
 
 // buildMenu builds the manu for this request for all known components in this distillery.
 //
 // NOTE(twiesing): Don't name this method "Menu", as it will cause a stack overflow.
 func (tpl *Templating) buildMenu(r *http.Request) []component.MenuItem {
-
 	path := mux.NormalizePath(r.URL.Path)
 
 	// get the static menu items, and then return all the regular ones
@@ -28,7 +29,7 @@ func (tpl *Templating) buildMenu(r *http.Request) []component.MenuItem {
 	return items
 }
 
-// Menu returns a list of menu items provided by routeables
+// Menu returns a list of menu items provided by routeables.
 func (tpl *Templating) Menu(r *http.Request) []component.MenuItem {
 	return tpl.menu.Get(func() []component.MenuItem {
 		items := make([]component.MenuItem, 0, len(tpl.dependencies.Routeables))
@@ -41,7 +42,7 @@ func (tpl *Templating) Menu(r *http.Request) []component.MenuItem {
 				Title:    routes.MenuTitle,
 				Priority: routes.MenuPriority,
 				Sticky:   routes.MenuSticky,
-				Path:     template.URL(routes.Prefix),
+				Path:     template.URL(routes.Prefix), // #nosec G203 -- prefix assumed to be safe
 			})
 		}
 		slices.SortFunc(items, component.MenuItemSort)

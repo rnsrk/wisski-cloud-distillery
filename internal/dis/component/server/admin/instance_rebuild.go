@@ -1,9 +1,14 @@
+//spellchecker:words admin
 package admin
 
+//spellchecker:words context html template http github wisski distillery internal component instances server assets templating models julienschmidt httprouter pkglib httpx embed
 import (
 	"context"
+	"errors"
+	"fmt"
 	"html/template"
 	"net/http"
+	"net/url"
 
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/instances"
@@ -23,7 +28,7 @@ var instanceSystemTemplate = templating.Parse[instanceSystemContext](
 	"instance_system.html", instanceSystemHTML, nil,
 )
 
-// instanceSystemContext is the context for instance_system.html
+// instanceSystemContext is the context for instance_system.html.
 type instanceSystemContext struct {
 	templating.RuntimeFlags
 
@@ -42,7 +47,7 @@ type instanceSystemContext struct {
 	Profiles       map[string]string
 }
 
-// prepare prares the given instanceSystemContent
+// prepare prares the given instanceSystemContent.
 func (isc *instanceSystemContext) prepare(rebuild bool) {
 	isc.Rebuild = rebuild
 	isc.PHPVersions = models.KnownPHPVersions()
@@ -70,22 +75,23 @@ func (admin *Admin) instanceRebuild(context.Context) http.Handler {
 
 		var instance *wisski.WissKI
 		instance, err = admin.dependencies.Instances.WissKI(r.Context(), slug)
-		if err == instances.ErrWissKINotFound {
+		if errors.Is(err, instances.ErrWissKINotFound) {
 			return isc, nil, httpx.ErrNotFound
 		}
 		if err != nil {
-			return isc, nil, err
+			return isc, nil, fmt.Errorf("failed to get WissKI: %w", err)
 		}
 
 		isc.Slug = instance.Slug
 		isc.System = instance.System
 
 		// replace the menu item
+		escapedSlug := url.PathEscape(instance.Slug)
 		funcs = []templating.FlagFunc{
-			templating.ReplaceCrumb(menuInstance, component.MenuItem{Title: "Instance", Path: template.URL("/admin/instance/" + instance.Slug)}),
-			templating.ReplaceCrumb(menuRebuild, component.MenuItem{Title: "Rebuild", Path: template.URL("/admin/instance/" + instance.Slug + "/rebuild")}),
+			templating.ReplaceCrumb(menuInstance, component.MenuItem{Title: "Instance", Path: template.URL("/admin/instance/" + escapedSlug)}),            // #nosec G203 -- escaped and safe
+			templating.ReplaceCrumb(menuRebuild, component.MenuItem{Title: "Rebuild", Path: template.URL("/admin/instance/" + escapedSlug + "/rebuild")}), // #nosec G203 -- escaped and safe
 			templating.Title(instance.Slug + " - Rebuild"),
-			admin.instanceTabs(slug, "rebuild"),
+			admin.instanceTabs(escapedSlug, "rebuild"),
 		}
 
 		isc.prepare(true)

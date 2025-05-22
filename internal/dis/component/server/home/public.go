@@ -1,5 +1,7 @@
+//spellchecker:words home
 package home
 
+//spellchecker:words context embed html template http strings github wisski distillery internal component server assets templating status pkglib httpx
 import (
 	"context"
 	_ "embed"
@@ -26,14 +28,14 @@ var publicTemplate = templating.Parse[publicContext](
 var aboutHTML string
 var aboutTemplate = template.Must(template.New("about.html").Parse(aboutHTML))
 
-// aboutContext is passed to about.html
+// aboutContext is passed to about.html.
 type aboutContext struct {
 	Instances    []status.WissKI // list of WissKI Instancaes
 	Logo         template.HTML
 	SelfRedirect string
 }
 
-// publicCOntext is passed to public.html
+// publicCOntext is passed to public.html.
 type publicContext struct {
 	templating.RuntimeFlags
 
@@ -71,9 +73,9 @@ func (home *Home) publicHandler(context.Context) http.Handler {
 		var builder strings.Builder
 
 		// prepare about
-		pc.aboutContext.Logo = logoHTML
-		pc.aboutContext.Instances = home.dependencies.ListInstances.Infos()
-		pc.aboutContext.SelfRedirect = config.SelfRedirect.String()
+		pc.Logo = logoHTML
+		pc.Instances = home.dependencies.ListInstances.Infos()
+		pc.SelfRedirect = config.SelfRedirect.String()
 
 		// render the about template
 
@@ -82,7 +84,7 @@ func (home *Home) publicHandler(context.Context) http.Handler {
 		}
 
 		// and return about!
-		pc.About = template.HTML(builder.String())
+		pc.About = template.HTML(builder.String()) // #nosec G203 -- template should be safe
 
 		// check if we should show the list of WissKIs
 		pc.ListEnabled = home.dependencies.ListInstances.ShouldShowList(r)

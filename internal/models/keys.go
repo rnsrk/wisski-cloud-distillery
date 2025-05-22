@@ -1,5 +1,7 @@
+//spellchecker:words models
 package models
 
+//spellchecker:words github gliderlabs golang crypto gossh
 import (
 	"github.com/gliderlabs/ssh"
 	gossh "golang.org/x/crypto/ssh"
@@ -8,7 +10,7 @@ import (
 // KeysTable is the name of the table the [Keys] model is stored in.
 const KeysTable = "keys"
 
-// Keys represents a distillery ssh key
+// Keys represents a distillery ssh key.
 type Keys struct {
 	Pk uint `gorm:"column:pk;primaryKey"`
 
@@ -39,7 +41,7 @@ func (keys *Keys) SignatureString() string {
 	return string(gossh.MarshalAuthorizedKey(key))
 }
 
-// SetPublicKey stores a specific public key in this key
+// SetPublicKey stores a specific public key in this key.
 func (keys *Keys) SetPublicKey(key ssh.PublicKey) {
 	keys.Signature = key.Marshal()
 }

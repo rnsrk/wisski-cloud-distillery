@@ -1,6 +1,7 @@
 // Package dis provides the main distillery
 package dis
 
+//spellchecker:words sync time github wisski distillery internal component auth next panel policy scopes tokens binder docker exporter logger instances malt purger meta provision resolver server admin socket actions assets cron handling handleing home legal list logo news templating solr sshkeys triplestore pkglib lifetime
 import (
 	"io"
 	"sync"
@@ -173,7 +174,7 @@ func (dis *Distillery) allComponents(context *lifetime.Registry[component.Compon
 	lifetime.Place[*next.Next](context)
 	lifetime.Place[*tokens.Tokens](context)
 
-	//scopes
+	// scopes
 	lifetime.Place[*scopes.Never](context)
 	lifetime.Place[*scopes.UserLoggedIn](context)
 	lifetime.Place[*scopes.AdminLoggedIn](context)
@@ -234,6 +235,7 @@ func (dis *Distillery) allComponents(context *lifetime.Registry[component.Compon
 	lifetime.Place[*actions.Start](context)
 	lifetime.Place[*actions.Stop](context)
 	lifetime.Place[*actions.Purge](context)
+	lifetime.Place[*actions.Prune](context)
 	lifetime.Place[*actions.RebuildTriplestore](context)
 
 	// Cron

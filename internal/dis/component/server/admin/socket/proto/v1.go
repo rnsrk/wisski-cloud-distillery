@@ -1,15 +1,19 @@
+//spellchecker:words proto
 package proto
 
+//spellchecker:words context encoding json errors sync time github wisski distillery internal component auth gorilla websocket pkglib recovery websocketx
 import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"sync"
 	"time"
 
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/auth"
 	"github.com/gorilla/websocket"
+	"github.com/tkw1536/pkglib/errorsx"
 	"github.com/tkw1536/pkglib/recovery"
 	"github.com/tkw1536/pkglib/websocketx"
 )
@@ -20,20 +24,7 @@ var (
 	errIncorrectParams   = errors.New("invalid number of parameters")
 )
 
-// Handle handles the v1 protocol version.
-// It is frozen and should not be changed.
-//
-// There are two kinds of messages:
-//
-// - text messages, which are used to send input and output.
-// - binary messages, which are json-encoded and used for control flow.
-//
-// To call an action, a client should send a [LegacyCallMessage] struct.
-// The server will then start handling input and output (via text messages).
-// If the client sends a SignalMessage, the signal is propagnated to the underlying context.
-// Finally it will send a ResultMessage once handling is complete.
-//
-// A corresponding client implementation of this can be found in ..../remote/proto.ts
+// A corresponding client implementation of this can be found in ..../remote/proto.ts.
 func (am ActionMap) handleV1Protocol(auth *auth.Auth, conn *websocketx.Connection) (name string, err error) {
 	var wg sync.WaitGroup
 
@@ -41,7 +32,7 @@ func (am ActionMap) handleV1Protocol(auth *auth.Auth, conn *websocketx.Connectio
 	defer func() {
 		// close the underlying connection, and then wait for everything to finish!
 		defer wg.Wait()
-		defer conn.Close()
+		defer errorsx.Close(conn, &err, "connection")
 
 		// recover from any errors
 		if e := recovery.Recover(recover()); e != nil {
@@ -71,7 +62,10 @@ func (am ActionMap) handleV1Protocol(auth *auth.Auth, conn *websocketx.Connectio
 		}
 
 		// and tell the client about it!
-		conn.Write(message)
+		if e := conn.Write(message); e != nil {
+			e = fmt.Errorf("failed to write result message: %w", e)
+			err = errorsx.Combine(err, e)
+		}
 	}()
 
 	// create channels to receive text and bytes messages
@@ -100,7 +94,6 @@ func (am ActionMap) handleV1Protocol(auth *auth.Auth, conn *websocketx.Connectio
 				return
 			}
 		}
-
 	}()
 
 	var call CallMessage
@@ -126,7 +119,7 @@ func (am ActionMap) handleV1Protocol(auth *auth.Auth, conn *websocketx.Connectio
 
 	// check that we have the given permission
 	if err := auth.CheckScope(action.ScopeParam, action.scope(), conn.Request()); err != nil {
-		return call.Call, err
+		return call.Call, fmt.Errorf("failed to check scope: %w", err)
 	}
 
 	// create a context to be canceled once done
@@ -157,21 +150,23 @@ func (am ActionMap) handleV1Protocol(auth *auth.Auth, conn *websocketx.Connectio
 	// create a pipe to handle the input
 	// and start handling it
 	var inputR, inputW = io.Pipe()
-	defer inputW.Close()
+	defer errorsx.Close(inputW, &err, "input writer")
 
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 
 		for text := range textMessages {
-			inputW.Write([]byte(text))
+			_, _ = inputW.Write([]byte(text)) // no way to report this error
 		}
 	}()
 
 	// write the output to the client as it comes in!
 	// NOTE(twiesing): We may eventually need buffering here ...
 	output := WriterFunc(func(b []byte) (int, error) {
-		conn.WriteText(string(b))
+		if err := conn.WriteText(string(b)); err != nil {
+			return 0, fmt.Errorf("failed to write text: %w", err)
+		}
 		return len(b), nil
 	})
 
@@ -179,13 +174,13 @@ func (am ActionMap) handleV1Protocol(auth *auth.Auth, conn *websocketx.Connectio
 	return call.Call, action.Handle(ctx, inputR, output, call.Params...)
 }
 
-// CallMessage is sent by the client to the server to invoke a remote procedure
+// CallMessage is sent by the client to the server to invoke a remote procedure.
 type CallMessage struct {
 	Call   string   `json:"call"`
 	Params []string `json:"params,omitempty"`
 }
 
-// SignalMessage is sent from the client to the server to stop the current procedure
+// SignalMessage is sent from the client to the server to stop the current procedure.
 type SignalMessage struct {
 	Signal Signal `json:"signal"`
 }
@@ -196,7 +191,7 @@ const (
 	SignalCancel Signal = "cancel"
 )
 
-// ResultMessage is sent by the server to the client to report the success of a remote procedure
+// ResultMessage is sent by the server to the client to report the success of a remote procedure.
 type ResultMessage struct {
 	Success bool   `json:"success"`
 	Message string `json:"message,omitempty"`

@@ -1,23 +1,27 @@
+//spellchecker:words logging
 package logging
 
+//spellchecker:words errors strings golang term
 import (
 	"fmt"
 	"io"
 	"strings"
 
+	"github.com/tkw1536/pkglib/errorsx"
 	"golang.org/x/term"
 )
 
 // LogOperation logs a message that is displayed to the user, and then increases the log indent level.
 func LogOperation(operation func() error, progress io.Writer, format string, args ...interface{}) error {
-	logOperation(progress, getIndent(progress), format, args...)
+	_, errLog := logOperation(progress, getIndent(progress), format, args...)
 	incIndent(progress)
 	defer decIndent(progress)
 
-	return operation()
+	err := operation()
+	return errorsx.Combine(err, errLog)
 }
 
-// LogMessage logs a message that is displayed to the user
+// LogMessage logs a message that is displayed to the user.
 func LogMessage(progress io.Writer, format string, args ...interface{}) (int, error) {
 	return logOperation(progress, getIndent(progress), format, args...)
 }
@@ -28,10 +32,14 @@ func logOperation(progress io.Writer, indent int, format string, args ...interfa
 		message = " => " + format + "\n"
 	}
 
-	return fmt.Fprintf(progress, message, args...)
+	count, err := fmt.Fprintf(progress, message, args...)
+	if err != nil {
+		return 0, fmt.Errorf("failed to format message: %w", err)
+	}
+	return count, nil
 }
 
-// streamIsTerminal checks if stream is a terminal
+// streamIsTerminal checks if stream is a terminal.
 func streamIsTerminal(stream any) bool {
 	file, ok := stream.(interface{ Fd() uintptr })
 	return ok && term.IsTerminal(int(file.Fd()))

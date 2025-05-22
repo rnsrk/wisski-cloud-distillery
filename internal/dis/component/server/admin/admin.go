@@ -1,7 +1,10 @@
+//spellchecker:words admin
 package admin
 
+//spellchecker:words context http github wisski distillery internal component auth policy scopes server admin socket handling templating wdlog julienschmidt httprouter instances pkglib httpx
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component"
@@ -11,8 +14,8 @@ import (
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/server/admin/socket"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/server/handling"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/server/templating"
+	"github.com/FAU-CDI/wisski-distillery/internal/wdlog"
 	"github.com/julienschmidt/httprouter"
-	"github.com/rs/zerolog"
 
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/instances"
 	"github.com/tkw1536/pkglib/httpx"
@@ -85,7 +88,6 @@ var (
 )
 
 func (admin *Admin) HandleRoute(ctx context.Context, route string) (handler http.Handler, err error) {
-
 	router := httprouter.New()
 
 	// add a handler for the index page
@@ -184,13 +186,16 @@ func (admin *Admin) HandleRoute(ctx context.Context, route string) (handler http
 }
 
 func (admin *Admin) loginHandler(ctx context.Context) http.Handler {
-	logger := zerolog.Ctx(ctx)
+	logger := wdlog.Of(ctx)
 
 	return admin.dependencies.Handling.Redirect(func(r *http.Request) (string, int, error) {
 		// parse the form
 		if err := r.ParseForm(); err != nil {
-			logger.Err(err).Msg("failed to parse admin login")
-			return "", 0, err
+			logger.Error(
+				"failed to parse admin login",
+				"error", err,
+			)
+			return "", 0, fmt.Errorf("failed to parse admin login: %w", err)
 		}
 
 		// get the instance
@@ -201,8 +206,11 @@ func (admin *Admin) loginHandler(ctx context.Context) http.Handler {
 
 		target, err := instance.Users().Login(r.Context(), nil, r.PostFormValue("user"))
 		if err != nil {
-			logger.Err(err).Msg("failed to admin login")
-			return "", 0, err
+			logger.Error(
+				"failed to admin login",
+				"error", err,
+			)
+			return "", 0, fmt.Errorf("failed to login admin: %w", err)
 		}
 		return target.String(), http.StatusSeeOther, err
 	})

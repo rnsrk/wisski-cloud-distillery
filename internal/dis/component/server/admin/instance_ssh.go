@@ -1,10 +1,14 @@
+//spellchecker:words admin
 package admin
 
+//spellchecker:words context embed html template http github wisski distillery internal component server assets templating pkglib httpx julienschmidt httprouter golang crypto gossh
 import (
 	"context"
 	_ "embed"
+	"fmt"
 	"html/template"
 	"net/http"
+	"net/url"
 
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/server/assets"
@@ -63,7 +67,7 @@ func (admin *Admin) instanceSSH(context.Context) http.Handler {
 
 		keys, err := ctx.Instance.SSH().Keys(r.Context())
 		if err != nil {
-			return ctx, nil, err
+			return ctx, nil, fmt.Errorf("failed to get keys: %w", err)
 		}
 
 		ctx.SSHKeys = make([]string, len(keys))
@@ -71,11 +75,12 @@ func (admin *Admin) instanceSSH(context.Context) http.Handler {
 			ctx.SSHKeys[i] = string(gossh.MarshalAuthorizedKey(key))
 		}
 
+		escapedSlug := url.PathEscape(ctx.Instance.Slug)
 		return ctx, []templating.FlagFunc{
-			templating.ReplaceCrumb(menuInstance, component.MenuItem{Title: "Instance", Path: template.URL("/admin/instance/" + ctx.Instance.Slug)}),
-			templating.ReplaceCrumb(menuSSH, component.MenuItem{Title: "SSH", Path: template.URL("/admin/instance/" + ctx.Instance.Slug + "/ssh")}),
+			templating.ReplaceCrumb(menuInstance, component.MenuItem{Title: "Instance", Path: template.URL("/admin/instance/" + escapedSlug)}), // #nosec G203 -- escaped and safe
+			templating.ReplaceCrumb(menuSSH, component.MenuItem{Title: "SSH", Path: template.URL("/admin/instance/" + escapedSlug + "/ssh")}),  // #nosec G203 -- escaped and safe
 			templating.Title(ctx.Instance.Slug + " - SSH"),
-			admin.instanceTabs(slug, "ssh"),
+			admin.instanceTabs(escapedSlug, "ssh"),
 		}, nil
 	})
 }

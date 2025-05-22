@@ -1,8 +1,11 @@
+//spellchecker:words tokens
 package tokens
 
+//spellchecker:words context crypto rand reflect strings github wisski distillery internal component models pkglib password gorm
 import (
 	"context"
 	"crypto/rand"
+	"fmt"
 	"reflect"
 	"strings"
 
@@ -13,7 +16,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// Tokens implements Tokens
+// Tokens implements Tokens.
 type Tokens struct {
 	component.Base
 
@@ -35,7 +38,11 @@ func (tok *Tokens) TableInfo() component.TableInfo {
 }
 
 func (tok *Tokens) table(ctx context.Context) (*gorm.DB, error) {
-	return tok.dependencies.SQL.QueryTable(ctx, tok)
+	conn, err := tok.dependencies.SQL.QueryTable(ctx, tok)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query table: %w", err)
+	}
+	return conn, nil
 }
 
 func (tok *Tokens) OnUserDelete(ctx context.Context, user *models.User) error {
@@ -46,7 +53,7 @@ func (tok *Tokens) OnUserDelete(ctx context.Context, user *models.User) error {
 	return table.Delete(&models.Token{}, &models.Token{User: user.User}).Error
 }
 
-// Tokens returns a list of tokens for the given user
+// Tokens returns a list of tokens for the given user.
 func (tok *Tokens) Tokens(ctx context.Context, user string) ([]models.Token, error) {
 	// the empty user has no tokens
 	if user == "" {
@@ -77,19 +84,19 @@ const (
 	tokenCharset     password.Charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 )
 
-// NewToken generates a new token
+// NewToken generates a new token.
 func NewToken() (string, error) {
 	// generate a new password
 	token, err := password.Generate(rand.Reader, tokenGroupCount*tokenGroupLength, tokenCharset)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to generate new token: %w", err)
 	}
 
 	// insert the token group separators
 	var result strings.Builder
 	result.Grow(len(token) + (tokenGroupCount-1)*len(tokenSeparator))
 
-	for i := 0; i < tokenGroupCount; i++ {
+	for i := range tokenGroupCount {
 		if i != 0 {
 			result.WriteString(tokenSeparator)
 		}
@@ -99,19 +106,19 @@ func NewToken() (string, error) {
 	}
 
 	return result.String(), nil
-
 }
 
 // Add adds a new token, unless it already exists.
 // The token is granted scopes with .SetScopes(scopes).
 func (tok *Tokens) Add(ctx context.Context, user string, description string, scopes []string) (*models.Token, error) {
-
 	// create a new token and set the scopes
 	mk := models.Token{
 		User:        user,
 		Description: description,
 	}
-	mk.SetScopes(scopes)
+	if err := mk.SetScopes(scopes); err != nil {
+		return nil, fmt.Errorf("failed to set scopes: %w", err)
+	}
 
 	// generate a new id for the token
 	{
@@ -144,7 +151,7 @@ func (tok *Tokens) Add(ctx context.Context, user string, description string, sco
 	return &mk, nil
 }
 
-// Remove removes a token with the given token from the user
+// Remove removes a token with the given token from the user.
 func (tok *Tokens) Remove(ctx context.Context, user, id string) error {
 	// get the table
 	table, err := tok.table(ctx)

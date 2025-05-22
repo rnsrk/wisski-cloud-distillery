@@ -1,18 +1,23 @@
+//spellchecker:words list
 package list
 
+//spellchecker:words context slog http github wisski distillery internal component auth instances status wdlog pkglib lazy golang sync errgroup
 import (
 	"context"
+	"fmt"
+	"log/slog"
 	"net/http"
 
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/auth"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/instances"
 	"github.com/FAU-CDI/wisski-distillery/internal/status"
+	"github.com/FAU-CDI/wisski-distillery/internal/wdlog"
 	"github.com/tkw1536/pkglib/lazy"
 	"golang.org/x/sync/errgroup"
 )
 
-// ListInstances holds information about all instances
+// ListInstances holds information about all instances.
 type ListInstances struct {
 	component.Base
 
@@ -33,7 +38,7 @@ func (li *ListInstances) Infos() []status.WissKI {
 	return li.infos.Get(nil)
 }
 
-// ShouldShowList determines if a list should be shown for the given request
+// ShouldShowList determines if a list should be shown for the given request.
 func (li *ListInstances) ShouldShowList(r *http.Request) bool {
 	config := component.GetStill(li).Config.Home.List
 	allowPrivate := config.Private.Value
@@ -81,11 +86,11 @@ func (li *ListInstances) Cron(ctx context.Context) (err error) {
 	return
 }
 
-// getNames returns the names of the given instances
+// getNames returns the names of the given instances.
 func (li *ListInstances) getNames(ctx context.Context) (map[string]struct{}, error) {
 	wissKIs, err := li.dependencies.Instances.All(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get instance names: %w", err)
 	}
 
 	names := make(map[string]struct{}, len(wissKIs))
@@ -95,12 +100,12 @@ func (li *ListInstances) getNames(ctx context.Context) (map[string]struct{}, err
 	return names, nil
 }
 
-// getInfos returns the names of the given instances
+// getInfos returns the names of the given instances.
 func (li *ListInstances) getInfos(ctx context.Context) ([]status.WissKI, error) {
 	// find all the WissKIs
 	wissKIs, err := li.dependencies.Instances.All(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to list all instances: %w", err)
 	}
 
 	infos := make([]status.WissKI, len(wissKIs))
@@ -108,14 +113,15 @@ func (li *ListInstances) getInfos(ctx context.Context) ([]status.WissKI, error) 
 	// determine their infos
 	var eg errgroup.Group
 	for i, instance := range wissKIs {
-		i := i
 		wissKI := instance
 		eg.Go(func() (err error) {
 			infos[i], err = wissKI.Info().Information(ctx, false)
 			return
 		})
 	}
-	eg.Wait()
+	if err := eg.Wait(); err != nil {
+		wdlog.Of(ctx).Error("getInfos() failed", slog.Any("error", err))
+	}
 
 	// filter them by those that are running and do not have prefixes excluded
 	infosF := infos[:0]

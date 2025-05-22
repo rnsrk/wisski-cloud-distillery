@@ -1,7 +1,10 @@
+//spellchecker:words wisski distillery
 package wisski_distillery
 
+//spellchecker:words context signal user github wisski distillery internal bootstrap wdlog goprogram exit pkglib
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/signal"
 	"os/user"
@@ -9,14 +12,13 @@ import (
 	"github.com/FAU-CDI/wisski-distillery/internal/bootstrap"
 	"github.com/FAU-CDI/wisski-distillery/internal/cli"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis"
-	"github.com/rs/zerolog"
+	"github.com/FAU-CDI/wisski-distillery/internal/wdlog"
 	"github.com/tkw1536/goprogram"
 	"github.com/tkw1536/goprogram/exit"
 	"github.com/tkw1536/pkglib/cgo"
 )
 
-// these define the ggman-specific program types
-// none of these are strictly needed, they're just around for convenience
+// none of these are strictly needed, they're just around for convenience.
 type wdcliEnv = *dis.Distillery
 type wdcliParameters = cli.Params
 type wdcliRequirements = cli.Requirements
@@ -55,10 +57,7 @@ type Description = goprogram.Description[wdCliFlags, wdcliRequirements]
 var GetContext = goprogram.GetContext[wdcliEnv, wdcliParameters, wdCliFlags, wdcliRequirements]
 
 // an error when nor arguments are provided.
-var errUserIsNotRoot = exit.Error{
-	ExitCode: exit.ExitGeneralArguments,
-	Message:  "this command has to be executed as root. the current user is not root",
-}
+var errUserIsNotRoot = exit.NewErrorWithCode("this command has to be executed as root. the current user is not root", exit.ExitGeneralArguments)
 
 const warnCGoEnabled = "Warning: This executable has been built with cgo enabled. This means certain commands may not work. \n"
 const warnNoDeployWdcli = "Warning: Not using %q executable at %q. This might leave the distillery in an inconsistent state. \n"
@@ -74,13 +73,17 @@ func NewProgram() Program {
 
 			// warn about cgo!
 			if cgo.Enabled {
-				context.Printf(warnCGoEnabled)
+				if _, err := context.Printf(warnCGoEnabled); err != nil {
+					return fmt.Errorf("failed to print error: %w", err)
+				}
 			}
 
 			// when not running inside docker and we need a distillery
 			// then we should warn if we are not using the distillery executable.
 			if dis := context.Environment; !context.Args.Flags.InternalInDocker && context.Description.Requirements.NeedsDistillery && !dis.Config.Paths.UsingDistilleryExecutable() {
-				context.EPrintf(warnNoDeployWdcli, bootstrap.Executable, dis.Config.Paths.ExecutablePath())
+				if _, err := context.EPrintf(warnNoDeployWdcli, bootstrap.Executable, dis.Config.Paths.ExecutablePath()); err != nil {
+					return fmt.Errorf("failed to log error: %w", err)
+				}
 			}
 
 			return nil
@@ -93,12 +96,8 @@ func NewProgram() Program {
 
 			{
 				context := GetContext(parent)
-				writer := zerolog.NewConsoleWriter()
-				writer.Out = context.Stdout
-
-				logger := zerolog.New(writer).Level(context.Args.Flags.LogLevel.Level())
-
-				parent = logger.WithContext(parent)
+				logger := wdlog.New(os.Stdout, context.Args.Flags.LogLevel.Level())
+				parent = wdlog.Set(parent, logger)
 			}
 
 			ctx, stop := signal.NotifyContext(parent, os.Interrupt, os.Kill)
@@ -110,3 +109,6 @@ func NewProgram() Program {
 		},
 	}
 }
+
+// TODO: Check if / when we need umaskfree?
+// TODO: Rework calls to WrapError

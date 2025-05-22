@@ -1,5 +1,7 @@
+//spellchecker:words component
 package component
 
+//spellchecker:words context
 import (
 	"context"
 	"io"
@@ -23,7 +25,7 @@ type Installable interface {
 	Context(parent InstallationContext) InstallationContext
 }
 
-// MakeStack registers the Installable as a stack
+// MakeStack registers the Installable as a stack.
 func MakeStack(component Installable, stack StackWithResources) StackWithResources {
 	stack.Dir = component.Path()
 	return stack

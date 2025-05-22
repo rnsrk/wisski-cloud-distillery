@@ -1,6 +1,9 @@
 // Package wisski provides WissKI
+//
+//spellchecker:words wisski
 package wisski
 
+//spellchecker:words sync github wisski distillery internal ingredient barrel composer drush manager system bookkeeping info locker mstore extras users reserve liquid pkglib lifetime
 import (
 	"sync"
 
@@ -24,8 +27,7 @@ import (
 	"github.com/tkw1536/pkglib/lifetime"
 )
 
-// WissKI represents a single WissKI Instance.
-// A WissKI may not be copied
+// A WissKI may not be copied.
 type WissKI struct {
 	liquid.Liquid
 
@@ -143,6 +145,10 @@ func (wisski *WissKI) Theme() *extras.Theme {
 	return export[*extras.Theme](wisski)
 }
 
+func (wisski *WissKI) Adapters() *extras.Adapters {
+	return export[*extras.Adapters](wisski)
+}
+
 //
 // All components
 // THESE SHOULD NEVER BE CALLED DIRECTLY
@@ -152,7 +158,7 @@ func (wisski *WissKI) allIngredients(context *lifetime.Registry[ingredient.Ingre
 	// core bits
 	lifetime.Place[*locker.Locker](context)
 	lifetime.Register(context, func(m *mstore.MStore, _ *liquid.Liquid) {
-		m.Storage = wisski.Malt.Meta.Storage(wisski.Slug)
+		m.Storage = wisski.Meta.Storage(wisski.Slug)
 	})
 
 	// php

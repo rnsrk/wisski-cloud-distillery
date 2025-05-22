@@ -1,16 +1,19 @@
 package cmd
 
+//spellchecker:words github wisski distillery internal goprogram exit
 import (
+	"fmt"
+
 	wisski_distillery "github.com/FAU-CDI/wisski-distillery"
 	"github.com/FAU-CDI/wisski-distillery/internal/cli"
 	"github.com/tkw1536/goprogram/exit"
 )
 
-// Config is the configuration command
+// Config is the configuration command.
 var Config wisski_distillery.Command = cfg{}
 
 type cfg struct {
-	Human bool `long:"human" description:"Print configuration in human-readable format"`
+	Human bool `description:"Print configuration in human-readable format" long:"human"`
 }
 
 func (c cfg) Description() wisski_distillery.Description {
@@ -23,19 +26,16 @@ func (c cfg) Description() wisski_distillery.Description {
 	}
 }
 
-var errMarshalConfig = exit.Error{
-	Message:  "unable to marshal config",
-	ExitCode: exit.ExitGeneric,
-}
+var errMarshalConfig = exit.NewErrorWithCode("unable to marshal config", exit.ExitGeneric)
 
 func (cfg cfg) Run(context wisski_distillery.Context) error {
 	if cfg.Human {
 		human := context.Environment.Config.MarshalSensitive()
-		context.Println(human)
+		_, _ = context.Println(human)
 		return nil
 	}
 	if err := context.Environment.Config.Marshal(context.Stdout); err != nil {
-		return errMarshalConfig.WrapError(err)
+		return fmt.Errorf("%w: %w", errMarshalConfig, err)
 	}
 	return nil
 }

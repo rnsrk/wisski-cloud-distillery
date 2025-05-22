@@ -1,6 +1,9 @@
 // Command wdcli implement the entry point for the wisski-distillery
+//
+//spellchecker:words main
 package main
 
+//spellchecker:words runtime debug github wisski distillery internal goprogram exit pkglib stream
 import (
 	"fmt"
 	"os"
@@ -60,6 +63,7 @@ func init() {
 	wdcli.Register(cmd.Snapshot)
 	wdcli.Register(cmd.RebuildTS)
 	wdcli.Register(cmd.Backup)
+	wdcli.Register(cmd.BackupsPrune)
 	wdcli.Register(cmd.Cron)
 	wdcli.Register(cmd.Monday)
 
@@ -74,10 +78,7 @@ func init() {
 }
 
 // an error when no arguments are provided.
-var errNoArgumentsProvided = exit.Error{
-	ExitCode: exit.ExitGeneralArguments,
-	Message:  "need at least one argument. use `wdcli license` to view licensing information",
-}
+var errNoArgumentsProvided = exit.NewErrorWithCode("need at least one argument. use `wdcli license` to view licensing information", exit.ExitGeneralArguments)
 
 func main() {
 	// recover from calls to panic(), and exit the program appropriatly.
@@ -96,27 +97,26 @@ func main() {
 	// when there are no arguments then parsing argument *will* fail
 	//
 	// we don't need to even bother with the rest of the program
-	// just immediatly return a custom error message.
+	// just immediately return a custom error message.
 	if len(os.Args) == 1 {
-		exit.Die(streams, errNoArgumentsProvided)
-		errNoArgumentsProvided.Return()
+		_ = exit.Die(streams, errNoArgumentsProvided) // returned below anyways
+		code, _ := exit.CodeFromError(errNoArgumentsProvided)
+		code.Return()
 		return
 	}
 
 	// creat a new set of parameters
 	// and then use them to execute the main command
-	err := func() error {
+	code, _ := exit.CodeFromError(func() error {
 		params, err := cli.ParamsFromEnv()
 		if err != nil {
 			return exit.Die(streams, err)
 		}
 
 		return wdcli.Main(streams, params, os.Args[1:])
-	}()
-
-	// return the error to the user
-
-	exit.AsError(err).Return()
+	}(),
+	)
+	code.Return()
 }
 
 const fatalPanicMessage = `Fatal Error: Panic

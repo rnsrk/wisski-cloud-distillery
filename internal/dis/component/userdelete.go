@@ -1,12 +1,14 @@
+//spellchecker:words component
 package component
 
+//spellchecker:words context github wisski distillery internal models
 import (
 	"context"
 
 	"github.com/FAU-CDI/wisski-distillery/internal/models"
 )
 
-// UserDeleteHook represents a hook that is called just before a user is deleted
+// UserDeleteHook represents a hook that is called just before a user is deleted.
 type UserDeleteHook interface {
 	Component
 

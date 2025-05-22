@@ -1,8 +1,9 @@
+//spellchecker:words resolver
 package resolver
 
+//spellchecker:words context http regexp time github wdresolve resolvers wisski distillery internal component auth scopes instances server assets handling templating wdlog pkglib lazy embed
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"regexp"
 	"time"
@@ -16,7 +17,7 @@ import (
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/server/assets"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/server/handling"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/server/templating"
-	"github.com/rs/zerolog"
+	"github.com/FAU-CDI/wisski-distillery/internal/wdlog"
 	"github.com/tkw1536/pkglib/lazy"
 
 	_ "embed"
@@ -80,7 +81,7 @@ func (resolver *Resolver) HandleRoute(ctx context.Context, route string) (http.H
 	t := tpl.Template()
 
 	// extract a logger and the fallback
-	logger := zerolog.Ctx(ctx)
+	logger := wdlog.Of(ctx)
 	fallback := &resolvers.Regexp{
 		Data: map[string]string{},
 	}
@@ -90,14 +91,20 @@ func (resolver *Resolver) HandleRoute(ctx context.Context, route string) (http.H
 	// handle the default domain name!
 	domainName := config.HTTP.PrimaryDomain
 	if domainName != "" {
-		fallback.Data[fmt.Sprintf("^https?://(.*)\\.%s", regexp.QuoteMeta(domainName))] = fmt.Sprintf("https://$1.%s", domainName)
-		logger.Info().Str("name", domainName).Msg("registering default domain")
+		fallback.Data["^https?://(.*)\\."+regexp.QuoteMeta(domainName)] = "https://$1." + domainName
+		logger.Info(
+			"registering default domain",
+			"name", domainName,
+		)
 	}
 
 	// handle the extra domains!
 	for _, domain := range config.HTTP.ExtraDomains {
-		fallback.Data[fmt.Sprintf("^https?://(.*)\\.%s", regexp.QuoteMeta(domain))] = fmt.Sprintf("https://$1.%s", domainName)
-		logger.Info().Str("name", domainName).Msg("registering legacy domain")
+		fallback.Data["^https?://(.*)\\."+regexp.QuoteMeta(domain)] = "https://$1." + domainName
+		logger.Info(
+			"registering legacy domain",
+			"name", domainName,
+		)
 	}
 
 	p := wdresolve.ResolveHandler{
@@ -107,9 +114,15 @@ func (resolver *Resolver) HandleRoute(ctx context.Context, route string) (http.H
 			}
 
 			if resolver.dependencies.Auth.CheckScope("", scopes.ScopeUserValid, r) != nil {
-				ctx.IndexContext.Prefixes = nil
+				ctx.Prefixes = nil
 			}
-			resolver.dependencies.Handling.WriteHTML(tpl.Context(r, ctx), nil, t, w, r)
+			if err := resolver.dependencies.Handling.WriteHTML(tpl.Context(r, ctx), nil, t, w, r); err != nil {
+				logger.Error(
+					"failed to write resolver html",
+					"error", err,
+					"url", context.URL,
+				)
+			}
 		},
 
 		Resolver: resolvers.InOrder{
@@ -127,7 +140,7 @@ func (resolver *Resolver) Target(uri string) string {
 	return wdresolve.PrefixTarget(resolver, uri)
 }
 
-// Prefixes returns a cached list of prefixes
+// Prefixes returns a cached list of prefixes.
 func (resolver *Resolver) Prefixes() (prefixes map[string]string) {
 	return resolver.prefixes.Get(nil) // by precondition there always is a cached value
 }

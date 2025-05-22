@@ -1,15 +1,19 @@
+//spellchecker:words admin
 package admin
 
+//spellchecker:words context embed html template http github wisski distillery internal component server assets templating pkglib httpx julienschmidt httprouter
 import (
 	"context"
 	_ "embed"
 	"html/template"
 	"net/http"
+	"net/url"
 
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/server/assets"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/server/templating"
 	"github.com/FAU-CDI/wisski-distillery/internal/wisski"
+	"github.com/FAU-CDI/wisski-distillery/internal/wisski/ingredient/php/extras"
 	"github.com/tkw1536/pkglib/httpx"
 
 	"github.com/julienschmidt/httprouter"
@@ -27,6 +31,7 @@ type instanceTriplestoreContext struct {
 	templating.RuntimeFlags
 
 	Instance *wisski.WissKI
+	Adapters []extras.DistilleryAdapter
 }
 
 func (admin *Admin) instanceTS(context.Context) http.Handler {
@@ -48,12 +53,14 @@ func (admin *Admin) instanceTS(context.Context) http.Handler {
 		if err != nil {
 			return ctx, nil, httpx.ErrNotFound
 		}
+		ctx.Adapters = ctx.Instance.Adapters().Adapters()
 
+		escapedSlug := url.PathEscape(ctx.Instance.Slug)
 		return ctx, []templating.FlagFunc{
-			templating.ReplaceCrumb(menuInstance, component.MenuItem{Title: "Instance", Path: template.URL("/admin/instance/" + ctx.Instance.Slug)}),
-			templating.ReplaceCrumb(menuTriplestore, component.MenuItem{Title: "Triplestore", Path: template.URL("/admin/instance/" + ctx.Instance.Slug + "/triplestore")}),
+			templating.ReplaceCrumb(menuInstance, component.MenuItem{Title: "Instance", Path: template.URL("/admin/instance/" + escapedSlug)}),                        // #nosec G203 -- escaped and safe
+			templating.ReplaceCrumb(menuTriplestore, component.MenuItem{Title: "Triplestore", Path: template.URL("/admin/instance/" + escapedSlug + "/triplestore")}), // #nosec G203 -- escaped and safe
 			templating.Title(ctx.Instance.Slug + " - Triplestore"),
-			admin.instanceTabs(slug, "triplestore"),
+			admin.instanceTabs(escapedSlug, "triplestore"),
 		}, nil
 	})
 }

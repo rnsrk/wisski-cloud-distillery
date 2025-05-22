@@ -1,24 +1,26 @@
 package sql
 
+//spellchecker:words context errors github wisski distillery internal models pkglib sqlx
 import (
 	"context"
 	"errors"
 
 	"github.com/FAU-CDI/wisski-distillery/internal/models"
+	"github.com/tkw1536/pkglib/errorsx"
 	"github.com/tkw1536/pkglib/sqlx"
 )
 
 var errProvisionInvalidDatabaseParams = errors.New("`Provision': invalid parameters")
 var errProvisionInvalidGrant = errors.New("`Provision': grant failed")
 
-// Provision provisions sql-specific resource for the given instance
+// Provision provisions sql-specific resource for the given instance.
 func (sql *SQL) Provision(ctx context.Context, instance models.Instance, domain string) error {
 	return sql.CreateDatabase(ctx, instance.SqlDatabase, instance.SqlUsername, instance.SqlPassword)
 }
 
-// Purge purges sql-specific resources for the given instance
+// Purge purges sql-specific resources for the given instance.
 func (sql *SQL) Purge(ctx context.Context, instance models.Instance, domain string) error {
-	return errors.Join(
+	return errorsx.Combine(
 		sql.PurgeDatabase(instance.SqlDatabase),
 		sql.PurgeUser(ctx, instance.SqlUsername),
 	)
@@ -29,7 +31,6 @@ func (sql *SQL) Purge(ctx context.Context, instance models.Instance, domain stri
 //
 // Provision internally waits for the database to become available.
 func (sql *SQL) CreateDatabase(ctx context.Context, name, user, password string) error {
-
 	// NOTE(twiesing): We shouldn't use string concat to build sql queries.
 	// But the driver doesn't support using query params for this particular query.
 	// Apparently it's a "feature", see https://github.com/go-sql-driver/mysql/issues/398#issuecomment-169951763.
@@ -94,7 +95,7 @@ func (sql *SQL) CreateSuperuser(ctx context.Context, user, password string, allo
 
 var errPurgeUser = errors.New("`PurgeUser': failed to drop user")
 
-// SQLPurgeUser deletes the specified user from the database
+// SQLPurgeUser deletes the specified user from the database.
 func (sql *SQL) PurgeUser(ctx context.Context, user string) error {
 	if !sqlx.IsSafeDatabaseSingleQuote(user) {
 		return errPurgeUser
@@ -111,7 +112,7 @@ func (sql *SQL) PurgeUser(ctx context.Context, user string) error {
 
 var errSQLPurgeDB = errors.New("unable to drop database: unsafe database name")
 
-// SQLPurgeDatabase deletes the specified db from the database
+// SQLPurgeDatabase deletes the specified db from the database.
 func (sql *SQL) PurgeDatabase(db string) error {
 	if !sqlx.IsSafeDatabaseLiteral(db) {
 		return errSQLPurgeDB

@@ -1,7 +1,11 @@
+//spellchecker:words panel
 package panel
 
+//spellchecker:words context html template http github wisski distillery internal component auth server assets templating models wdlog pkglib httpx form field embed
 import (
 	"context"
+	"errors"
+	"fmt"
 	"html/template"
 	"net/http"
 
@@ -10,7 +14,7 @@ import (
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/server/assets"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/server/templating"
 	"github.com/FAU-CDI/wisski-distillery/internal/models"
-	"github.com/rs/zerolog"
+	"github.com/FAU-CDI/wisski-distillery/internal/wdlog"
 	"github.com/tkw1536/pkglib/httpx"
 	"github.com/tkw1536/pkglib/httpx/form"
 	"github.com/tkw1536/pkglib/httpx/form/field"
@@ -34,6 +38,8 @@ type TokenTemplateContext struct {
 	Tokens []models.Token
 }
 
+var errNoUserInSession = errors.New("no user in session")
+
 func (panel *UserPanel) tokensRoute(context.Context) http.Handler {
 	tpl := tokensTemplate.Prepare(
 		panel.dependencies.Templating,
@@ -49,42 +55,64 @@ func (panel *UserPanel) tokensRoute(context.Context) http.Handler {
 	return tpl.HTMLHandler(panel.dependencies.Handling, func(r *http.Request) (tc TokenTemplateContext, err error) {
 		// list the user
 		user, err := panel.dependencies.Auth.UserOfSession(r)
-		if err != nil || user == nil {
-			return tc, err
+		if err != nil {
+			return tc, fmt.Errorf("failed to get user of session: %w", err)
+		}
+		if user == nil {
+			return tc, errNoUserInSession
 		}
 
-		tc.Domain = template.URL(component.GetStill(panel).Config.HTTP.JoinPath().String())
+		tc.Domain = template.URL(component.GetStill(panel).Config.HTTP.JoinPath().String()) // #nosec G203 -- assumed to be safe
 
 		// get the tokens
 		tc.Tokens, err = panel.dependencies.Tokens.Tokens(r.Context(), user.User.User)
-		return tc, err
+		if err != nil {
+			return tc, fmt.Errorf("failed to get token: %w", err)
+		}
+		return tc, nil
 	})
 }
 
 func (panel *UserPanel) tokensDeleteRoute(ctx context.Context) http.Handler {
-	logger := zerolog.Ctx(ctx)
+	logger := wdlog.Of(ctx)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
-			logger.Err(err).Str("action", "delete token").Msg("failed to parse form")
+			logger.Error(
+				"failed to parse form",
+				"error", err,
+				"action", "delete token",
+			)
 			httpx.HTMLInterceptor.Fallback.ServeHTTP(w, r)
 			return
 		}
 		user, err := panel.dependencies.Auth.UserOfSession(r)
 		if err != nil {
-			logger.Err(err).Str("action", "delete token").Msg("failed to get current user")
+			logger.Error(
+				"failed to get current user",
+				"error", err,
+				"action", "delete token",
+			)
 			httpx.HTMLInterceptor.Fallback.ServeHTTP(w, r)
 			return
 		}
 
 		id := r.PostFormValue("id")
 		if id == "" {
-			logger.Err(err).Str("action", "delete token").Msg("failed to get token")
+			logger.Error(
+				"failed to get token",
+				"error", err,
+				"action", "delete token",
+			)
 			httpx.HTMLInterceptor.Fallback.ServeHTTP(w, r)
 			return
 		}
 
 		if err := panel.dependencies.Tokens.Remove(r.Context(), user.User.User, id); err != nil {
-			logger.Err(err).Str("action", "delete token").Msg("failed to delete token")
+			logger.Error(
+				"failed to delete token",
+				"error", err,
+				"action", "delete token",
+			)
 			httpx.HTMLInterceptor.Fallback.ServeHTTP(w, r)
 			return
 		}
@@ -177,7 +205,7 @@ func (panel *UserPanel) tokensAddRoute(context.Context) http.Handler {
 			// render the created context
 			return panel.dependencies.Handling.WriteHTML(
 				tplDone.Context(r, TokenCreateContext{
-					Domain: template.URL(component.GetStill(panel).Config.HTTP.JoinPath().String()),
+					Domain: template.URL(component.GetStill(panel).Config.HTTP.JoinPath().String()), // #nosec G203 -- assumed to be safe
 					Token:  tok,
 				}),
 				nil,

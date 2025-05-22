@@ -1,7 +1,10 @@
+//spellchecker:words panel
 package panel
 
+//spellchecker:words context html template http github wisski distillery internal component auth server assets templating pkglib httpx form field embed
 import (
 	"context"
+	"fmt"
 	"html/template"
 	"net/http"
 
@@ -46,7 +49,7 @@ func (panel *UserPanel) routeTOTPEnable(context.Context) http.Handler {
 
 			user, err := panel.dependencies.Auth.UserOfSession(r)
 			if err != nil {
-				return struct{}{}, err
+				return struct{}{}, fmt.Errorf("failed to get user of session: %w", err)
 			}
 
 			{
@@ -81,6 +84,7 @@ var totpEnrollTemplate = templating.Parse[totpEnrollContext](
 	templating.Assets(assets.AssetsUser),
 )
 
+//nolint:errname
 type totpEnrollContext struct {
 	userFormContext
 
@@ -121,14 +125,14 @@ func (panel *UserPanel) routeTOTPEnroll(context.Context) http.Handler {
 			}
 
 			if err == nil && user != nil {
-				ctx.userFormContext.User = &user.User
+				ctx.User = &user.User
 				secret, err := user.TOTP()
 				if err == nil {
 					img, _ := auth.TOTPLink(secret, 500, 500)
 
 					ctx.TOTPSecret = secret.Secret()
-					ctx.TOTPImage = template.URL(img)
-					ctx.TOTPURL = template.URL(secret.URL())
+					ctx.TOTPImage = template.URL(img)        // #nosec G203 -- this is safe
+					ctx.TOTPURL = template.URL(secret.URL()) // #nosec G203 -- this is safe
 				}
 			}
 
@@ -141,7 +145,7 @@ func (panel *UserPanel) routeTOTPEnroll(context.Context) http.Handler {
 
 			user, err := panel.dependencies.Auth.UserOfSession(r)
 			if err != nil {
-				return struct{}{}, err
+				return struct{}{}, fmt.Errorf("failed to get user of session: %w", err)
 			}
 
 			{
@@ -200,7 +204,7 @@ func (panel *UserPanel) routeTOTPDisable(context.Context) http.Handler {
 
 			user, err := panel.dependencies.Auth.UserOfSession(r)
 			if err != nil {
-				return struct{}{}, err
+				return struct{}{}, fmt.Errorf("failed to get user of session: %w", err)
 			}
 
 			{

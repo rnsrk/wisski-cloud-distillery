@@ -1,8 +1,11 @@
+//spellchecker:words instances
 package instances
 
+//spellchecker:words context errors path filepath github wisski distillery internal component instances malt models goprogram exit gorm clause
 import (
 	"context"
 	"errors"
+	"fmt"
 	"path/filepath"
 
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component"
@@ -11,7 +14,6 @@ import (
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/sql"
 	"github.com/FAU-CDI/wisski-distillery/internal/models"
 	"github.com/FAU-CDI/wisski-distillery/internal/wisski"
-	"github.com/tkw1536/goprogram/exit"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -31,17 +33,12 @@ func (instances *Instances) Path() string {
 	return filepath.Join(component.GetStill(instances).Config.Paths.Root, "instances")
 }
 
-// ErrWissKINotFound is returned when a WissKI is not found
+// ErrWissKINotFound is returned when a WissKI is not found.
 var ErrWissKINotFound = errors.New("WissKI not found")
 
-var errSQL = exit.Error{
-	Message:  "unknown SQL error %s",
-	ExitCode: exit.ExitGeneric,
-}
-
-// use uses the non-nil wisski instance with this instances
+// use uses the non-nil wisski instance with this instances.
 func (instances *Instances) use(wisski *wisski.WissKI) {
-	wisski.Liquid.Malt = instances.dependencies.Malt
+	wisski.Malt = instances.dependencies.Malt
 }
 
 // WissKI returns the WissKI with the provided slug, if it exists.
@@ -53,22 +50,22 @@ func (instances *Instances) WissKI(ctx context.Context, slug string) (wissKI *wi
 
 	sql := instances.dependencies.SQL
 	if err := sql.WaitQueryTable(ctx); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to wait for database: %w", err)
 	}
 
 	table, err := sql.QueryTable(ctx, instances.dependencies.InstanceTable)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to query table: %w", err)
 	}
 
 	// create a struct
 	wissKI = new(wisski.WissKI)
 
 	// find the instance by slug
-	query := table.Find(&wissKI.Liquid.Instance, &models.Instance{Slug: slug})
+	query := table.Find(&wissKI.Instance, &models.Instance{Slug: slug})
 	switch {
 	case query.Error != nil:
-		return nil, errSQL.WithMessageF(query.Error)
+		return nil, fmt.Errorf("failed to find instance: %w", query.Error)
 	case query.RowsAffected == 0:
 		return nil, ErrWissKINotFound
 	}
@@ -93,17 +90,17 @@ func (instances *Instances) Instance(ctx context.Context, instance models.Instan
 func (instances *Instances) Has(ctx context.Context, slug string) (ok bool, err error) {
 	sql := instances.dependencies.SQL
 	if err := sql.WaitQueryTable(ctx); err != nil {
-		return false, err
+		return false, fmt.Errorf("failed to wait for database: %w", err)
 	}
 
 	table, err := sql.QueryTable(ctx, instances.dependencies.InstanceTable)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("failed to query table: %w", err)
 	}
 
 	query := table.Select("count(*) > 0").Where("slug = ?", slug).Find(&ok)
 	if query.Error != nil {
-		return false, errSQL.WithMessageF(query.Error)
+		return false, fmt.Errorf("failed to count instances: %w", query.Error)
 	}
 	return
 }
@@ -133,17 +130,17 @@ func (instances *Instances) Load(ctx context.Context, slugs ...string) ([]*wissk
 	return instances.WissKIs(ctx, slugs...)
 }
 
-// find finds instances based on the provided query
+// find finds instances based on the provided query.
 func (instances *Instances) find(ctx context.Context, order bool, query func(table *gorm.DB) *gorm.DB) (results []*wisski.WissKI, err error) {
 	sql := instances.dependencies.SQL
 	if err := sql.WaitQueryTable(ctx); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to wait for query table: %w", err)
 	}
 
 	// open the bookkeeping table
 	table, err := sql.QueryTable(ctx, instances.dependencies.InstanceTable)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to query table: %w", err)
 	}
 
 	// prepare a query
@@ -159,14 +156,14 @@ func (instances *Instances) find(ctx context.Context, order bool, query func(tab
 	var bks []models.Instance
 	find = find.Find(&bks)
 	if find.Error != nil {
-		return nil, errSQL.WithMessageF(find.Error)
+		return nil, fmt.Errorf("failed to find instances: %w", find.Error)
 	}
 
 	// make proper instances
 	results = make([]*wisski.WissKI, len(bks))
 	for i, bk := range bks {
 		results[i] = new(wisski.WissKI)
-		results[i].Liquid.Instance = bk
+		results[i].Instance = bk
 		instances.use(results[i])
 	}
 

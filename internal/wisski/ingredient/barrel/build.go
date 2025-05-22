@@ -1,7 +1,11 @@
+//spellchecker:words barrel
 package barrel
 
+//spellchecker:words context time github wisski distillery internal component meta status ingredient locker mstore
 import (
 	"context"
+	"errors"
+	"fmt"
 	"io"
 	"time"
 
@@ -18,7 +22,7 @@ import (
 // It also logs the current time into the metadata belonging to this instance.
 func (barrel *Barrel) Build(ctx context.Context, progress io.Writer, start bool) error {
 	if !barrel.dependencies.Locker.TryLock(ctx) {
-		return locker.Locked
+		return locker.ErrLocked
 	}
 	defer barrel.dependencies.Locker.Unlock(ctx)
 
@@ -29,14 +33,14 @@ func (barrel *Barrel) Build(ctx context.Context, progress io.Writer, start bool)
 	{
 		err := stack.Install(ctx, progress, context)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to install stack: %w", err)
 		}
 	}
 
 	{
 		err := stack.Update(ctx, progress, start)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to update stack: %w", err)
 		}
 	}
 
@@ -44,16 +48,16 @@ func (barrel *Barrel) Build(ctx context.Context, progress io.Writer, start bool)
 	return barrel.setLastRebuild(ctx)
 }
 
-// TODO: Move this to time.Time
+// TODO: Move this to time.Time.
 var lastRebuild = mstore.For[int64]("lastRebuild")
 
 func (barrel Barrel) LastRebuild(ctx context.Context) (t time.Time, err error) {
 	epoch, err := lastRebuild.Get(ctx, barrel.dependencies.MStore)
-	if err == meta.ErrMetadatumNotSet {
+	if errors.Is(err, meta.ErrMetadatumNotSet) {
 		return t, nil
 	}
 	if err != nil {
-		return t, err
+		return t, fmt.Errorf("failed to set last rebuild: %w", err)
 	}
 
 	// and turn it into time!
@@ -61,7 +65,10 @@ func (barrel Barrel) LastRebuild(ctx context.Context) (t time.Time, err error) {
 }
 
 func (barrel *Barrel) setLastRebuild(ctx context.Context) error {
-	return lastRebuild.Set(ctx, barrel.dependencies.MStore, time.Now().Unix())
+	if err := lastRebuild.Set(ctx, barrel.dependencies.MStore, time.Now().Unix()); err != nil {
+		return fmt.Errorf("failed to set last rebuild: %w", err)
+	}
+	return nil
 }
 
 type LastRebuildFetcher struct {

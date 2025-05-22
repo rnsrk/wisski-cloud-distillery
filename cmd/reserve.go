@@ -1,6 +1,9 @@
 package cmd
 
+//spellchecker:words github wisski distillery internal component models logging goprogram exit pkglib
 import (
+	"fmt"
+
 	wisski_distillery "github.com/FAU-CDI/wisski-distillery"
 	"github.com/FAU-CDI/wisski-distillery/internal/cli"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component"
@@ -10,12 +13,12 @@ import (
 	"github.com/tkw1536/pkglib/fsx"
 )
 
-// Reserve is the 'reserve' command
+// Reserve is the 'reserve' command.
 var Reserve wisski_distillery.Command = reserve{}
 
 type reserve struct {
 	Positionals struct {
-		Slug string `positional-arg-name:"slug" required:"1-1" description:"name of instance to reserve"`
+		Slug string `description:"name of instance to reserve" positional-arg-name:"slug" required:"1-1"`
 	} `positional-args:"true"`
 }
 
@@ -31,43 +34,47 @@ func (reserve) Description() wisski_distillery.Description {
 
 // TODO: AfterParse to check instance!
 
-var errReserveAlreadyExists = exit.Error{
-	Message:  "instance %q already exists",
-	ExitCode: exit.ExitGeneric,
-}
-
-var errReserveGeneric = exit.Error{
-	Message:  "unable to provision instance",
-	ExitCode: exit.ExitGeneric,
-}
+var (
+	errReserveAlreadyExists = exit.NewErrorWithCode("instance already exists", exit.ExitGeneric)
+	errReserveGeneric       = exit.NewErrorWithCode("unable to provision instance", exit.ExitGeneric)
+)
 
 func (r reserve) Run(context wisski_distillery.Context) (err error) {
-	defer errReserveGeneric.DeferWrap(&err)
+	if err := r.run(context); err != nil {
+		return fmt.Errorf("%w: %w", errReserveGeneric, err)
+	}
+	return nil
+}
 
+func (r reserve) run(context wisski_distillery.Context) (err error) {
 	dis := context.Environment
 	slug := r.Positionals.Slug
 
 	// check that it doesn't already exist
-	logging.LogMessage(context.Stderr, "Reserving new WissKI instance %s", slug)
+	if _, err := logging.LogMessage(context.Stderr, "Reserving new WissKI instance %s", slug); err != nil {
+		return fmt.Errorf("failed to log message: %w", err)
+	}
 	if exists, err := dis.Instances().Has(context.Context, slug); err != nil || exists {
-		return errReserveAlreadyExists.WithMessageF(slug)
+		return fmt.Errorf("%q: %w: ", slug, errReserveAlreadyExists)
 	}
 
 	// make it in-memory
 	instance, err := dis.Instances().Create(slug, models.System{})
 	if err != nil {
-		return errProvisionGeneric.WithMessageF(slug, err)
+		return fmt.Errorf("%w: %w", errProvisionGeneric, err)
 	}
 
 	// check that the base directory does not exist
 	{
-		logging.LogMessage(context.Stderr, "Checking that base directory %s does not exist", instance.FilesystemBase)
+		if _, err := logging.LogMessage(context.Stderr, "Checking that base directory %s does not exist", instance.FilesystemBase); err != nil {
+			return fmt.Errorf("failed to log message: %w", err)
+		}
 		exists, err := fsx.Exists(instance.FilesystemBase)
 		if err != nil {
-			return errProvisionGeneric.WrapError(err)
+			return fmt.Errorf("%w: %w", errProvisionGeneric, err)
 		}
 		if exists {
-			return errReserveAlreadyExists.WithMessageF(slug)
+			return fmt.Errorf("%q: %w", slug, errReserveAlreadyExists)
 		}
 	}
 
@@ -77,19 +84,21 @@ func (r reserve) Run(context wisski_distillery.Context) (err error) {
 		if err := logging.LogOperation(func() error {
 			return s.Install(context.Context, context.Stderr, component.InstallationContext{})
 		}, context.Stderr, "Installing docker stack"); err != nil {
-			return err
+			return fmt.Errorf("failed to install docker stack: %w", err)
 		}
 
 		if err := logging.LogOperation(func() error {
 			return s.Update(context.Context, context.Stderr, true)
 		}, context.Stderr, "Updating docker stack"); err != nil {
-			return err
+			return fmt.Errorf("failed to update docker stack: %w", err)
 		}
 	}
 
 	// and we're done!
-	logging.LogMessage(context.Stderr, "Instance has been reserved")
-	context.Printf("URL:      %s\n", instance.URL().String())
+	if _, err := logging.LogMessage(context.Stderr, "Instance has been reserved"); err != nil {
+		return fmt.Errorf("failed to log message: %w", err)
+	}
+	_, _ = context.Printf("URL:      %s\n", instance.URL().String())
 
 	return nil
 }

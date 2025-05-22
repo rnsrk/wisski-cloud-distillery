@@ -1,5 +1,7 @@
+//spellchecker:words auth
 package auth
 
+//spellchecker:words errors http github wisski distillery internal component
 import (
 	"errors"
 	"net/http"
@@ -13,7 +15,7 @@ var (
 	ErrNoParam       = errors.New("scope does not take parameter")
 )
 
-// Scopes returns a map of all available scopes
+// Scopes returns a map of all available scopes.
 func (auth *Auth) Scopes() map[component.Scope]component.ScopeInfo {
 	scopes := auth.getScopeMap()
 	mp := make(map[component.Scope]component.ScopeInfo, len(scopes))
@@ -23,7 +25,7 @@ func (auth *Auth) Scopes() map[component.Scope]component.ScopeInfo {
 	return mp
 }
 
-// getScopeMap return a (cached version of) all scopes
+// getScopeMap return a (cached version of) all scopes.
 func (auth *Auth) getScopeMap() map[component.Scope]scopeMapEntry {
 	return auth.scopeMap.Get(func() map[component.Scope]scopeMapEntry {
 		mp := make(map[component.Scope]scopeMapEntry, len(auth.dependencies.ScopeProviders))
@@ -42,7 +44,7 @@ func (auth *Auth) getScopeMap() map[component.Scope]scopeMapEntry {
 // A request can be one of two types:
 // - A signed in user with an implicitly associated set of scopes
 // - A session authorized with a token only
-// If the request is denied a scope, the error will be of type AccessDeniedError.
+// If the request is denied a scope, the error will be wrapping an error of type AccessDeniedError.
 func (auth *Auth) CheckScope(param string, scope component.Scope, r *http.Request) error {
 	// the empty scope is always permitted implicitly
 	if scope == "" {
