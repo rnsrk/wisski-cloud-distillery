@@ -1,12 +1,16 @@
+//spellchecker:words barrel
 package barrel
 
+//spellchecker:words github wisski distillery internal ingredient locker mstore
 import (
 	"github.com/FAU-CDI/wisski-distillery/internal/wisski/ingredient"
 	"github.com/FAU-CDI/wisski-distillery/internal/wisski/ingredient/locker"
 	"github.com/FAU-CDI/wisski-distillery/internal/wisski/ingredient/mstore"
 )
 
-// Barrel provides access to the underlying Barrel
+// Barrel provides access to the underlying Barrel.
+//
+//nolint:recvcheck
 type Barrel struct {
 	ingredient.Base
 	dependencies struct {
@@ -25,4 +29,6 @@ const (
 
 	LocalSettingsPath  = "/settings/local.php"
 	GlobalSettingsPath = "/settings/global.php"
+
+	PHPIniPath = "/usr/local/etc/php/conf.d/zzz_custom.ini"
 )

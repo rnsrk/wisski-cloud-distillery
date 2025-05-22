@@ -1,5 +1,7 @@
+//spellchecker:words barrel
 package barrel
 
+//spellchecker:words context github alessio shellescape goprogram exit pkglib stream
 import (
 	"context"
 	"fmt"
@@ -16,7 +18,7 @@ func (ee ExitError) Error() string {
 }
 
 func (ee ExitError) Code() exit.ExitCode {
-	return exit.ExitCode(ee)
+	return exit.Code(int(ee))
 }
 
 // Shell executes a shell with the given command line arguments inside the container.

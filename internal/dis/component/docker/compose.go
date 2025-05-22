@@ -1,28 +1,33 @@
+//spellchecker:words docker
 package docker
 
+//spellchecker:words context golang slices github wisski distillery compose docker types filters
 import (
 	"context"
+	"fmt"
 
-	"golang.org/x/exp/slices"
+	"slices"
 
 	"github.com/FAU-CDI/wisski-distillery/pkg/compose"
-	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/docker/client"
+	"github.com/tkw1536/pkglib/errorsx"
 )
 
 // Containers loads the compose project at path, connects to the docker daemon, and then lists all containers belonging to the given services.
 // If services is empty, all containers belonging to any service are returned.
-func (docker *Docker) Containers(ctx context.Context, path string, services ...string) (containers []types.Container, err error) {
+func (docker *Docker) Containers(ctx context.Context, path string, services ...string) (containers []container.Summary, e error) {
 	proj, err := compose.Open(path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to open compose file: %w", err)
 	}
 
-	client, err := docker.APIClient()
+	client, err := docker.apiClient()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create docker client: %w", err)
 	}
-	defer client.Close()
+	defer errorsx.Close(client, &e, "docker client")
 
 	return docker.containers(ctx, proj, client, false, services...)
 }
@@ -39,7 +44,7 @@ const (
 //
 // services optionally filters the returned containers by the services they belong to.
 // If services is empty, all containers are returned, else containers belonging to any of the services included.
-func (*Docker) containers(ctx context.Context, project compose.Project, client DockerClient, all bool, services ...string) ([]types.Container, error) {
+func (*Docker) containers(ctx context.Context, project compose.Project, client *client.Client, all bool, services ...string) ([]container.Summary, error) {
 	// build filters
 	f := filters.NewArgs(
 		filters.Arg("label", projectLabel+"="+project.Name),
@@ -52,18 +57,18 @@ func (*Docker) containers(ctx context.Context, project compose.Project, client D
 	}
 
 	// find the containers
-	containers, err := client.ContainerList(ctx, types.ContainerListOptions{
+	containers, err := client.ContainerList(ctx, container.ListOptions{
 		All:     all,
 		Filters: f,
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to list containers: %w", err)
 	}
 
 	// for all services or exactly one service (case above)
 	// we can immediatly return!
 	if len(services) <= 1 {
-		return containers, err
+		return containers, nil
 	}
 
 	// make a map of services that were requested

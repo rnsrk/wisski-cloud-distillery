@@ -1,8 +1,11 @@
+//spellchecker:words panel
 package panel
 
+//spellchecker:words context errors http embed github wisski distillery internal component server assets templating pkglib httpx form field
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 
 	_ "embed"
@@ -48,7 +51,7 @@ func (panel *UserPanel) routePassword(context.Context) http.Handler {
 		LogTemplateError: tpl.LogTemplateError,
 
 		Validate: func(r *http.Request, values map[string]string) (struct{}, error) {
-			old, passcode, new, new2 := values["old"], values["otp"], values["new"], values["new2"]
+			old, passcode, new, new2 := values["old"], values["otp"], values["new"], values["new2"] //nolint:predeclared
 
 			if new != new2 {
 				return struct{}{}, errPasswordsNotIdentical
@@ -56,7 +59,7 @@ func (panel *UserPanel) routePassword(context.Context) http.Handler {
 
 			user, err := panel.dependencies.Auth.UserOfSession(r)
 			if err != nil {
-				return struct{}{}, err
+				return struct{}{}, fmt.Errorf("failed to get user of session: %w", err)
 			}
 
 			{
@@ -69,7 +72,7 @@ func (panel *UserPanel) routePassword(context.Context) http.Handler {
 			{
 				err := user.CheckPasswordPolicy(new)
 				if err != nil {
-					return struct{}{}, err
+					return struct{}{}, fmt.Errorf("failed to check password policy: %w", err)
 				}
 			}
 

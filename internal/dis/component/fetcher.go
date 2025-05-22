@@ -1,5 +1,7 @@
+//spellchecker:words component
 package component
 
+//spellchecker:words context github wisski distillery internal status
 import (
 	"context"
 
@@ -14,7 +16,9 @@ type DistilleryFetcher interface {
 	Fetch(flags FetcherFlags, target *status.Distillery) error
 }
 
-// FetcherFlags describes options for a DistilleryFetcher
+// FetcherFlags describes options for a DistilleryFetcher.
+//
+//nolint:containedctx // TODO: pass context explicitly
 type FetcherFlags struct {
 	Context context.Context
 }

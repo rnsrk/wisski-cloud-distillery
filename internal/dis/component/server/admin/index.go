@@ -1,5 +1,7 @@
+//spellchecker:words admin
 package admin
 
+//spellchecker:words context http time embed github wisski distillery internal component server assets templating status golang sync errgroup
 import (
 	"context"
 	"fmt"
@@ -17,14 +19,14 @@ import (
 
 // Status produces a new observation of the distillery, and a new information of all instances
 // The information on all instances is passed the given quick flag.
-func (admin *Admin) Status(ctx context.Context, QuickInformation bool) (target status.Distillery, information []status.WissKI, err error) {
+func (admin *Admin) Status(ctx context.Context, quick bool) (target status.Distillery, information []status.WissKI, err error) {
 	var group errgroup.Group
 
 	group.Go(func() error {
 		// list all the instances
 		all, err := admin.dependencies.Instances.All(ctx)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to list all instances: %w", err)
 		}
 
 		// get all of their info!
@@ -52,7 +54,6 @@ func (admin *Admin) Status(ctx context.Context, QuickInformation bool) (target s
 		Context: ctx,
 	}
 	for _, o := range admin.dependencies.Fetchers {
-		o := o
 		group.Go(func() error {
 			return o.Fetch(flags, &target)
 		})
@@ -60,7 +61,7 @@ func (admin *Admin) Status(ctx context.Context, QuickInformation bool) (target s
 
 	// wait for all the fetchers to finish
 	if err := group.Wait(); err != nil {
-		return status.Distillery{}, nil, err
+		return status.Distillery{}, nil, fmt.Errorf("failed to fetch distillery information: %w", err)
 	}
 
 	// count overall instances

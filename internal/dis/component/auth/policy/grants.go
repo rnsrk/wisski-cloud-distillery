@@ -1,8 +1,11 @@
+//spellchecker:words policy
 package policy
 
+//spellchecker:words context errors github wisski distillery internal models gorm clause
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/FAU-CDI/wisski-distillery/internal/models"
 	"gorm.io/gorm/clause"
@@ -10,7 +13,7 @@ import (
 
 var (
 	ErrNoAccess = errors.New("no access")
-	ErrInvalid  = errors.New("invalid parameters")
+	errInvalid  = errors.New("invalid parameters")
 )
 
 // Set sets a specific grant, overwriting any previous grant.
@@ -22,14 +25,14 @@ func (policy *Policy) Set(ctx context.Context, grant models.Grant) error {
 		grant.DrupalUsername = grant.User
 	}
 	if grant.User == "" || grant.Slug == "" {
-		return ErrInvalid
+		return errInvalid
 	}
 
 	// check that the referenced user exists!
 	{
 		_, err := policy.dependencies.Auth.User(ctx, grant.User)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to get user: %w", err)
 		}
 	}
 
@@ -50,7 +53,7 @@ func (policy *Policy) Set(ctx context.Context, grant models.Grant) error {
 func (policy *Policy) Remove(ctx context.Context, username string, slug string) error {
 	// empty username or slug never have acccess
 	if username == "" || slug == "" {
-		return ErrInvalid
+		return errInvalid
 	}
 
 	// get the table
@@ -63,10 +66,10 @@ func (policy *Policy) Remove(ctx context.Context, username string, slug string) 
 	return table.Delete(&models.Grant{}, models.Grant{User: username, Slug: slug}).Error
 }
 
-// User returns all grants for the given user
+// User returns all grants for the given user.
 func (policy *Policy) User(ctx context.Context, username string) (grants []models.Grant, err error) {
 	if username == "" {
-		return nil, ErrInvalid
+		return nil, errInvalid
 	}
 
 	// get the table
@@ -83,10 +86,10 @@ func (policy *Policy) User(ctx context.Context, username string) (grants []model
 	return grants, nil
 }
 
-// Instance returns all the grants for the given instance
+// Instance returns all the grants for the given instance.
 func (policy *Policy) Instance(ctx context.Context, slug string) (grants []models.Grant, err error) {
 	if slug == "" {
-		return nil, ErrInvalid
+		return nil, errInvalid
 	}
 
 	// get the table
@@ -111,7 +114,7 @@ func (policy *Policy) Instance(ctx context.Context, slug string) (grants []model
 func (policy *Policy) Has(ctx context.Context, username string, slug string) (grant models.Grant, err error) {
 	// empty username or slug never have acccess
 	if username == "" || slug == "" {
-		return grant, ErrInvalid
+		return grant, errInvalid
 	}
 
 	// get the table

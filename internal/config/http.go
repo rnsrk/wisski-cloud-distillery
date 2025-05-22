@@ -1,5 +1,7 @@
+//spellchecker:words config
 package config
 
+//spellchecker:words html template strings github wisski distillery internal config validators golang idna
 import (
 	"fmt"
 	"html/template"
@@ -14,38 +16,38 @@ type HTTPConfig struct {
 	// Each created Drupal Instance corresponds to a single domain name.
 	// These domain names should either be a complete domain name or a sub-domain of a default domain.
 	// This setting configures the default domain-name to create subdomains of.
-	PrimaryDomain string `yaml:"domain" default:"localhost.kwarc.info" validate:"domain"`
+	PrimaryDomain string `default:"localhost.kwarc.info" validate:"domain" yaml:"domain"`
 
 	// By default, only the 'self' domain above is caught.
 	// To catch additional domains, add them here (comma separated)
-	ExtraDomains []string `yaml:"domains" validate:"domains"`
+	ExtraDomains []string `validate:"domains" yaml:"domains"`
 
 	// The system can support setting up certificate(s) automatically.
 	// It can be enabled by setting an email for certbot certificates.
 	// This email address can be configured here.
-	CertbotEmail string `yaml:"certbot_email" validate:"email"`
+	CertbotEmail string `validate:"email" yaml:"certbot_email"`
 
 	// Debug determines if error messages should be written as html pages with stack traces to http clients.
 	// This potentially exposes sensitive information and may cause certain API responses to be of content type 'text/html' unexpectedly.
-	Debug validators.NullableBool `yaml:"debug" validate:"bool" default:"false"`
+	Debug validators.NullableBool `default:"false" validate:"bool" yaml:"debug"`
 
 	// Also serve the panel on the toplevel domain.
 	// Note that the panel is *always* servered under the "panel" domain.
 	// Disabling this is not recommended.
-	Panel validators.NullableBool `yaml:"panel" validate:"bool" default:"true"`
+	Panel validators.NullableBool `default:"true" validate:"bool" yaml:"panel"`
 
 	// API determines if the API is enabled.
 	// In a future version of the distillery, it will be enabled by default.
-	API validators.NullableBool `yaml:"api" validate:"bool" default:"false"`
+	API validators.NullableBool `default:"false" validate:"bool" yaml:"api"`
 
 	// TS determintes if the special Triplestore domain is enabled.
-	TS validators.NullableBool `yaml:"ts" validate:"bool" default:"false"`
+	TS validators.NullableBool `default:"false" validate:"bool" yaml:"ts"`
 
 	// PhpMyAdmin determines if the special PhpMyAdmin domain is enabled.
-	PhpMyAdmin validators.NullableBool `yaml:"phpmyadmin" validate:"bool" default:"false"`
+	PhpMyAdmin validators.NullableBool `default:"false" validate:"bool" yaml:"phpmyadmin"`
 }
 
-// PanelDomain is the domain name where the control panel runs.
+// PanelDomain is the primary domain name where the control panel runs.
 func (hcfg HTTPConfig) PanelDomain() string {
 	// if we have panel domain enabled, then return it
 	if hcfg.Panel.Set && hcfg.Panel.Value {
@@ -56,7 +58,16 @@ func (hcfg HTTPConfig) PanelDomain() string {
 	return hcfg.Domains(PanelDomain.Domain())[0]
 }
 
-// TSDomain returns the full url to the triplestore, if any
+// returns a list of all domains that the panel is available at.
+func (hcfg HTTPConfig) PanelDomains() []string {
+	domains := hcfg.Domains(PanelDomain.Domain())
+	if hcfg.Panel.Set && hcfg.Panel.Value {
+		domains = append(domains, hcfg.Domains("")...)
+	}
+	return domains
+}
+
+// TSDomain returns the full url to the triplestore, if any.
 func (hcfg HTTPConfig) TSURL() template.URL {
 	return hcfg.optionalURL(TriplestoreDomain.Domain(), hcfg.TS)
 }
@@ -67,7 +78,7 @@ func (hcfg HTTPConfig) PhpMyAdminURL() template.URL {
 
 // optionalURL returns the public-facing url to domain if enabled is true.
 func (hcfg HTTPConfig) optionalURL(domain string, enabled validators.NullableBool) template.URL {
-	if !(enabled.Set && enabled.Value) {
+	if !enabled.Set || !enabled.Value {
 		return ""
 	}
 
@@ -79,7 +90,7 @@ func (hcfg HTTPConfig) optionalURL(domain string, enabled validators.NullableBoo
 	if hcfg.HTTPSEnabled() {
 		u.Scheme = "https"
 	}
-	return template.URL(u.String())
+	return template.URL(u.String()) // #nosec G203 -- config assumed to be safe
 }
 
 // JoinPath returns the root public url joined with the provided parts.
@@ -109,7 +120,7 @@ func (hcfg HTTPConfig) HTTPSEnabled() bool {
 	return hcfg.CertbotEmail != ""
 }
 
-// SpecialDomain represents a reserved domain
+// SpecialDomain represents a reserved domain.
 type SpecialDomain string
 
 var (
@@ -197,7 +208,7 @@ func (cfg HTTPConfig) SlugFromHost(host string) (slug string, ok bool) {
 	return "", ok
 }
 
-// NormSlugFromHost is like SlugFromHost, but normalizes the panel host
+// NormSlugFromHost is like SlugFromHost, but normalizes the panel host.
 func (cfg HTTPConfig) NormSlugFromHost(host string) (string, bool) {
 	// if we didn't get a domain, don't do anything
 	slug, ok := cfg.SlugFromHost(host)
@@ -211,7 +222,7 @@ func (cfg HTTPConfig) NormSlugFromHost(host string) (string, bool) {
 	}
 
 	// if we don't serve the toplevel domain then the toplevel domain is an error.
-	if slug == "" && !(cfg.Panel.Set && cfg.Panel.Value) {
+	if slug == "" && (!cfg.Panel.Set || !cfg.Panel.Value) {
 		return "", false
 	}
 
@@ -227,11 +238,7 @@ func TrimSuffixFold(s string, suffix string) string {
 
 // DefaultHostRule returns the host rule for the control panel of this distillery.
 func (cfg HTTPConfig) PanelHostRule() string {
-	all := cfg.Domains(PanelDomain.Domain())
-	if cfg.Panel.Set && cfg.Panel.Value {
-		all = append(all, cfg.Domains("")...)
-	}
-	return MakeHostRule(all...)
+	return MakeHostRule(cfg.PanelDomains()...)
 }
 
 // MakeHostRule builds a new Host() rule string to be used by traefik.

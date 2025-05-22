@@ -1,5 +1,7 @@
+//spellchecker:words exporter
 package exporter
 
+//spellchecker:words crypto rand errors path filepath time github wisski distillery internal component exporter logger instances passwordx pkglib umaskfree password
 import (
 	"crypto/rand"
 	"errors"
@@ -18,7 +20,7 @@ import (
 	"github.com/tkw1536/pkglib/password"
 )
 
-// Exporter manages snapshots and backups
+// Exporter manages snapshots and backups.
 type Exporter struct {
 	component.Base
 	dependencies struct {

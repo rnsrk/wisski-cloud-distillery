@@ -1,5 +1,7 @@
+//spellchecker:words exporter
 package exporter
 
+//spellchecker:words context path filepath time github wisski distillery internal component
 import (
 	"context"
 	"fmt"
@@ -17,14 +19,15 @@ func (exporter *Exporter) ShouldPrune(modtime time.Time) bool {
 	return time.Since(modtime) > component.GetStill(exporter).Config.MaxBackupAge
 }
 
-// Prune prunes all old exports
+// Prune prunes all old exports.
+// TODO: Don't call this automatically!
 func (exporter *Exporter) PruneExports(ctx context.Context, progress io.Writer) error {
 	sPath := exporter.ArchivePath()
 
 	// list all the files
 	entries, err := os.ReadDir(sPath)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to read achive path: %w", err)
 	}
 
 	for _, entry := range entries {
@@ -36,7 +39,7 @@ func (exporter *Exporter) PruneExports(ctx context.Context, progress io.Writer) 
 		// grab info about the file
 		info, err := entry.Info()
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to get entry info: %w", err)
 		}
 
 		// check if it should be pruned!
@@ -46,14 +49,17 @@ func (exporter *Exporter) PruneExports(ctx context.Context, progress io.Writer) 
 
 		// assemble path, and then remove the file!
 		path := filepath.Join(sPath, entry.Name())
-		fmt.Fprintf(progress, "Removing %s cause it is older than %d days\n", path, component.GetStill(exporter).Config.MaxBackupAge)
+		_, _ = fmt.Fprintf(progress, "Removing %s cause it is older than %d days\n", path, component.GetStill(exporter).Config.MaxBackupAge)
 
 		if err := os.Remove(path); err != nil {
-			return err
+			return fmt.Errorf("failed to remove snapshot: %w", err)
 		}
 	}
 
 	// prune the snapshot log!
 	_, err = exporter.dependencies.ExporterLogger.Log(ctx)
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to log snapshot: %w", err)
+	}
+	return nil
 }

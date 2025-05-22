@@ -1,14 +1,19 @@
 // Package execx provides thin wrappers around the os.Exec package.
+//
+//spellchecker:words execx
 package execx
 
 // TODO: Move this to an external package
 
+//spellchecker:words context exec path filepath github wisski distillery internal wdlog pkglib stream
 import (
 	"context"
+	"errors"
+	"fmt"
 	"os/exec"
 	"path/filepath"
 
-	"github.com/rs/zerolog"
+	"github.com/FAU-CDI/wisski-distillery/internal/wdlog"
 	"github.com/tkw1536/pkglib/stream"
 )
 
@@ -41,7 +46,12 @@ func Exec(ctx context.Context, io stream.IOStream, workdir string, exe string, a
 
 	// start the command, but if something happens, return nil
 	err := cmd.Start()
-	zerolog.Ctx(ctx).Debug().Str("exe", exe).Strs("argv", argv).Err(err).Msg("exec.Command.Start")
+	wdlog.Of(ctx).Debug(
+		"exec.Command.Start",
+		"exe", exe,
+		"argv", argv,
+		"error", err,
+	)
 	if err != nil {
 		return CommandErrorFunc
 	}
@@ -54,7 +64,12 @@ func Exec(ctx context.Context, io stream.IOStream, workdir string, exe string, a
 		select {
 		case <-ctx.Done():
 			err := cmd.Process.Kill()
-			zerolog.Ctx(ctx).Debug().Str("exe", exe).Strs("argv", argv).Err(err).Msg("exec.Command.Kill")
+			wdlog.Of(ctx).Debug(
+				"exec.Command.Kill",
+				"exe", exe,
+				"argv", argv,
+				"error", err,
+			)
 		case <-waitdone:
 		}
 	}()
@@ -68,11 +83,17 @@ func Exec(ctx context.Context, io stream.IOStream, workdir string, exe string, a
 		}()
 
 		err := cmd.Wait()
-		zerolog.Ctx(ctx).Debug().Str("exe", exe).Strs("argv", argv).Err(err).Msg("exec.Command.Wait")
+		wdlog.Of(ctx).Debug(
+			"exec.Command.Wait",
+			"exe", exe,
+			"argv", argv,
+			"error", err,
+		)
 
 		// non-zero exit
-		if err, ok := err.(*exec.ExitError); ok {
-			return err.ExitCode()
+		var exit *exec.ExitError
+		if errors.As(err, &exit) {
+			return exit.ExitCode()
 		}
 
 		if err != nil {
@@ -92,7 +113,11 @@ func MustExec(ctx context.Context, io stream.IOStream, workdir string, exe strin
 func LookPathAbs(file string) (string, error) {
 	path, err := exec.LookPath(file)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to find file: %w", err)
 	}
-	return filepath.Abs(path)
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve path: %w", err)
+	}
+	return abs, nil
 }

@@ -1,5 +1,7 @@
+//spellchecker:words barrel
 package barrel
 
+//spellchecker:words embed path filepath github wisski distillery internal component ingredient
 import (
 	"embed"
 	"path/filepath"
@@ -16,7 +18,12 @@ const localSettingsName = "settings.local.php"
 //go:embed local.settings.php
 var localSettingsTemplate string
 
-// Barrel returns a stack representing the running WissKI Instance
+const phpIniName = "custom.ini"
+
+//go:embed custom.ini
+var phpIniTemplate string
+
+// Barrel returns a stack representing the running WissKI Instance.
 func (barrel *Barrel) Stack() component.StackWithResources {
 	liquid := ingredient.GetLiquid(barrel)
 	config := ingredient.GetStill(barrel).Config
@@ -27,10 +34,11 @@ func (barrel *Barrel) Stack() component.StackWithResources {
 		},
 
 		Resources:   barrelResources,
-		ContextPath: filepath.Join("barrel"),
+		ContextPath: "barrel",
 
 		CreateFiles: map[string]string{
 			localSettingsName: localSettingsTemplate,
+			phpIniName:        phpIniTemplate,
 		},
 
 		EnvContext: map[string]string{
@@ -47,9 +55,12 @@ func (barrel *Barrel) Stack() component.StackWithResources {
 			"LOCAL_SETTINGS_PATH":  filepath.Join(liquid.FilesystemBase, localSettingsName),
 			"LOCAL_SETTINGS_MOUNT": LocalSettingsPath,
 
+			"PHP_INI_PATH":  filepath.Join(liquid.FilesystemBase, phpIniName),
+			"PHP_INI_MOUNT": PHPIniPath,
+
 			"BARREL_BASE_IMAGE":       liquid.GetDockerBaseImage(),
 			"IIP_SERVER_ENABLED":      liquid.GetIIPServerEnabled(),
-			"OPCACHE_MODE":            liquid.OpCacheMode(),
+			"PHP_CONFIG_MODE":         liquid.PHPDevelopmentMode(),
 			"CONTENT_SECURITY_POLICY": liquid.ContentSecurityPolicy,
 		},
 

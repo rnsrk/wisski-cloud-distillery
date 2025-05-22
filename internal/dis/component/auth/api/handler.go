@@ -1,6 +1,7 @@
 // Package api implements a common handler used by the api routes
 package api
 
+//spellchecker:words encoding json errors http github wisski distillery internal config component auth scopes wdlog pkglib httpx lazy
 import (
 	"encoding/json"
 	"errors"
@@ -10,7 +11,7 @@ import (
 	"github.com/FAU-CDI/wisski-distillery/internal/config"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/auth"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/auth/scopes"
-	"github.com/rs/zerolog"
+	"github.com/FAU-CDI/wisski-distillery/internal/wdlog"
 	"github.com/tkw1536/pkglib/httpx"
 	"github.com/tkw1536/pkglib/lazy"
 )
@@ -59,7 +60,7 @@ var apiForbidden = &Response{
 	Message: "forbidden",
 }
 
-// ServeHTTP servers an api call
+// ServeHTTP servers an api call.
 func (handler *Handler[T]) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// check that the api is actually enabled!
 	if !handler.Config.HTTP.API.Value {
@@ -86,6 +87,8 @@ func (handler *Handler[T]) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// we now delegate to user-level code;
 	// so we now need to make sure that panic()s are caught.
 	var stage string
+
+	//nolint:contextcheck
 	defer func() {
 		// recover any error
 		rec := recover()
@@ -94,7 +97,12 @@ func (handler *Handler[T]) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// log the error, and serve the default internal server error
-		zerolog.Ctx(r.Context()).Error().Str("panic", fmt.Sprint(rec)).Str("stage", stage).Str("route", r.URL.RequestURI()).Msg("api handler caused panic()")
+		wdlog.Of(r.Context()).Error(
+			"api handler caused panic()",
+			"panic", fmt.Sprint(rec),
+			"stage", stage,
+			"route", r.URL.RequestURI(),
+		)
 		apiInternalServerError.ServeHTTP(w, r)
 	}()
 
@@ -118,7 +126,7 @@ func (handler *Handler[T]) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	stage = "handler"
 
 	result, err := handler.Handler(param, r)
-	switch true {
+	switch {
 	case err == nil: /* keep going */
 
 	// handle common httpx errors
@@ -152,11 +160,10 @@ func (handler *Handler[T]) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// encode the result into json and send it as the response
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(result)
+	_ = json.NewEncoder(w).Encode(result) //nolint:errchkjson // TODO: no way to report this error
 }
 
-// Response represents a generic response to any request.
-// Response objects cache response serialization
+// Response objects cache response serialization.
 type Response struct {
 	Status  int    `json:"status"`
 	Message string `json:"message"`

@@ -1,17 +1,20 @@
+//spellchecker:words info
 package info
 
+//spellchecker:words context reflect sync atomic time github wisski distillery internal phpx status wdlog ingredient pkglib sema golang errgroup
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"reflect"
 	"sync/atomic"
 	"time"
 
 	"github.com/FAU-CDI/wisski-distillery/internal/phpx"
 	"github.com/FAU-CDI/wisski-distillery/internal/status"
+	"github.com/FAU-CDI/wisski-distillery/internal/wdlog"
 	"github.com/FAU-CDI/wisski-distillery/internal/wisski/ingredient"
 	"github.com/FAU-CDI/wisski-distillery/internal/wisski/ingredient/php"
-	"github.com/rs/zerolog"
 	"github.com/tkw1536/pkglib/sema"
 	"golang.org/x/sync/errgroup"
 )
@@ -46,7 +49,9 @@ func (nfo *Info) Information(ctx context.Context, quick bool) (info status.WissK
 			return nfo.dependencies.PHP.NewServer()
 		},
 		Discard: func(s *phpx.Server) {
-			s.Close()
+			if err := s.Close(); err != nil {
+				wdlog.Of(ctx).Error("failed to close phpx.Server: %w", slog.Any("error", err))
+			}
 		},
 	}
 	defer pool.Close()
@@ -65,7 +70,7 @@ func (nfo *Info) Information(ctx context.Context, quick bool) (info status.WissK
 	{
 		var group errgroup.Group
 		for i, fetcher := range nfo.dependencies.Fetchers {
-			fetcher, flags, i := fetcher, flags, i
+			flags := flags // needed for a local copy of flags
 			group.Go(func() error {
 				// quick: don't need to create servers
 				if flags.Quick {
@@ -100,17 +105,26 @@ func (nfo *Info) Information(ctx context.Context, quick bool) (info status.WissK
 	var tookSum time.Duration
 
 	// get a map of how long each fetcher took
-	times := zerolog.Dict()
+	times := make(map[string]time.Duration, len(nfo.dependencies.Fetchers))
 	for i, fetcher := range nfo.dependencies.Fetchers {
 		tookSum += fetcherTimes[i]
-		times = times.Dur(fetcher.Name(), fetcherTimes[i])
+		times[fetcher.Name()] = fetcherTimes[i]
 	}
 
 	// compute the ratio taken
 	tookRatio := float64(took) / float64(tookSum)
 
 	// and send it to debugging output
-	zerolog.Ctx(ctx).Debug().Uint64("servers", serversUsed).Dict("fetchers_took_ms", times).Dur("took_ms", took).Dur("took_sum_ms", tookSum).Float64("took_ratio", tookRatio).Bool("quick", quick).Msg("ran information fetchers")
+	wdlog.Of(ctx).Debug(
+		"ran information fetchers",
+
+		"servers", serversUsed,
+		"fetchers_took_ms", times,
+		"took_ms", took,
+		"took_sum_ms", tookSum,
+		"took_ratio", tookRatio,
+		"quick", quick,
+	)
 
 	return
 }

@@ -1,17 +1,22 @@
+//spellchecker:words triplestore
 package triplestore
 
+//spellchecker:words bytes context encoding json mime multipart http time github wisski distillery internal component wdlog errors pkglib timex
 import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component"
-	"github.com/pkg/errors"
-	"github.com/rs/zerolog"
+	"github.com/FAU-CDI/wisski-distillery/internal/wdlog"
+	"github.com/tkw1536/pkglib/errorsx"
 	"github.com/tkw1536/pkglib/timex"
 )
 
@@ -32,14 +37,13 @@ type TriplestoreUserAppSettings struct {
 // This includes e.g. CRUDing a specific repo.
 const tsTrivialTimeout = time.Minute
 
-// RequestHeaders represent headers of a raw http request
+// RequestHeaders represent headers of a raw http request.
 type RequestHeaders struct {
 	Accept      string
 	ContentType string
 }
 
 func (rh *RequestHeaders) With(headers RequestHeaders) *RequestHeaders {
-
 	// create new request headers and copy the old options
 	var newHeaders RequestHeaders
 	if rh != nil {
@@ -72,11 +76,15 @@ func (ts *Triplestore) DoRestWithForm(ctx context.Context, timeout time.Duration
 	{
 		part, err := writer.CreateFormFile(fieldname, "filename.txt")
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to create form file: %w", err)
 		}
-		io.Copy(part, fieldvalue)
+		if _, err := io.Copy(part, fieldvalue); err != nil {
+			return nil, fmt.Errorf("failed to copy values into form: %w", err)
+		}
 	}
-	writer.Close()
+	if err := writer.Close(); err != nil {
+		return nil, fmt.Errorf("failed to close writer: %w", err)
+	}
 
 	// and sent the reader as the body
 	return ts.DoRestWithReader(ctx, timeout, method, url, headers.With(RequestHeaders{ContentType: writer.FormDataContentType()}), &buffer)
@@ -88,7 +96,7 @@ func (ts *Triplestore) DoRestWithMarshal(ctx context.Context, timeout time.Durat
 	// encode into a buffer
 	var buffer bytes.Buffer
 	if err := json.NewEncoder(&buffer).Encode(body); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to encode body: %w", err)
 	}
 
 	return ts.DoRestWithReader(ctx, timeout, method, url, headers.With(RequestHeaders{ContentType: "application/json"}), &buffer)
@@ -110,7 +118,7 @@ func (ts *Triplestore) DoRestWithReader(ctx context.Context, timeout time.Durati
 	// create the request and authentication
 	req, err := http.NewRequestWithContext(ctx, method, ts.BaseURL+url, body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to send http request: %w", err)
 	}
 	req.SetBasicAuth(config.AdminUsername, config.AdminPassword)
 
@@ -123,47 +131,61 @@ func (ts *Triplestore) DoRestWithReader(ctx context.Context, timeout time.Durati
 	}
 
 	// and send it
-	return client.Do(req)
+	res, err := client.Do(req)
+	if err != nil {
+		return res, fmt.Errorf("failed to do http request: %w", err)
+	}
+	return res, nil
 }
 
 // Wait waits for the connection to the Triplestore to succeed.
 // This is achieved using a polling strategy.
 func (ts Triplestore) Wait(ctx context.Context) error {
-	return timex.TickUntilFunc(func(time.Time) bool {
+	if err := timex.TickUntilFunc(func(time.Time) bool {
 		res, err := ts.DoRest(ctx, tsTrivialTimeout, http.MethodGet, "/rest/repositories", nil)
-		zerolog.Ctx(ctx).Trace().Err(err).Msg("Triplestore wait")
+		wdlog.Of(ctx).Debug(
+			"Triplestore Wait",
+			"error", err,
+		)
 		if err != nil {
 			return false
 		}
-		defer res.Body.Close()
+		defer res.Body.Close() //nolint:errcheck // no way to report error
 		return true
-	}, ctx, ts.PollInterval)
-}
-
-// PurgeUser deletes the specified user from the triplestore.
-// When the user does not exist, returns no error.
-func (ts Triplestore) PurgeUser(ctx context.Context, user string) error {
-	res, err := ts.DoRest(ctx, tsTrivialTimeout, http.MethodDelete, "/rest/security/users/"+user, nil)
-	if err != nil {
-		return err
-	}
-	defer res.Body.Close()
-	if res.StatusCode != http.StatusNoContent && res.StatusCode != http.StatusNotFound {
-		return errors.Errorf("Delete returned code %d", res.StatusCode)
+	}, ctx, ts.PollInterval); err != nil {
+		return fmt.Errorf("failed to wait for triplestore: %w", err)
 	}
 	return nil
 }
 
-// PurgeRepo deletes the specified repo from the triplestore.
-// When the repo does not exist, returns no error.
-func (ts Triplestore) PurgeRepo(ctx context.Context, repo string) error {
-	res, err := ts.DoRest(ctx, tsTrivialTimeout, http.MethodDelete, "/rest/repositories/"+repo, nil)
+var errPurgeReturnedCode = errors.New("purge returned abnormal exit code")
+
+// PurgeUser deletes the specified user from the triplestore.
+// When the user does not exist, returns no error.
+func (ts Triplestore) PurgeUser(ctx context.Context, user string) (e error) {
+	res, err := ts.DoRest(ctx, tsTrivialTimeout, http.MethodDelete, "/rest/security/users/"+url.PathEscape(user), nil)
 	if err != nil {
 		return err
 	}
-	defer res.Body.Close()
+	defer errorsx.Close(res.Body, &e, "response body")
+	if res.StatusCode != http.StatusNoContent && res.StatusCode != http.StatusNotFound {
+		return fmt.Errorf("%w: %d", errPurgeReturnedCode, res.StatusCode)
+	}
+	return nil
+}
+
+var errDeleteReturnedCode = errors.New("delete returned abnormal exit code")
+
+// PurgeRepo deletes the specified repo from the triplestore.
+// When the repo does not exist, returns no error.
+func (ts Triplestore) PurgeRepo(ctx context.Context, repo string) (e error) {
+	res, err := ts.DoRest(ctx, tsTrivialTimeout, http.MethodDelete, "/rest/repositories/"+url.PathEscape(repo), nil)
+	if err != nil {
+		return err
+	}
+	defer errorsx.Close(res.Body, &e, "response body")
 	if res.StatusCode != http.StatusOK && res.StatusCode != http.StatusNotFound {
-		return errors.Errorf("Delete returned code %d", res.StatusCode)
+		return fmt.Errorf("%w: %d", errDeleteReturnedCode, res.StatusCode)
 	}
 	return nil
 }

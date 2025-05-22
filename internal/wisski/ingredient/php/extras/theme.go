@@ -1,5 +1,7 @@
+//spellchecker:words extras
 package extras
 
+//spellchecker:words context github wisski distillery internal phpx status ingredient embed
 import (
 	"context"
 
@@ -11,7 +13,7 @@ import (
 	_ "embed"
 )
 
-// Prefixes implements reading and writing prefix
+// Prefixes implements reading and writing prefix.
 type Theme struct {
 	ingredient.Base
 	dependencies struct {
@@ -22,7 +24,7 @@ type Theme struct {
 //go:embed theme.php
 var themePHP string
 
-// Get returns the currently active theme
+// Get returns the currently active theme.
 func (t *Theme) Get(ctx context.Context, server *phpx.Server) (theme string, err error) {
 	err = t.dependencies.PHP.ExecScript(
 		ctx, server, &theme, themePHP,

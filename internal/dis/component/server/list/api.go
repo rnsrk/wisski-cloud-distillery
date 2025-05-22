@@ -1,5 +1,7 @@
+//spellchecker:words list
 package list
 
+//spellchecker:words context http time github wisski distillery internal component auth scopes status
 import (
 	"context"
 	"net/http"
@@ -12,7 +14,7 @@ import (
 	"github.com/FAU-CDI/wisski-distillery/internal/status"
 )
 
-// API implements an API to list all instances
+// API implements an API to list all instances.
 type API struct {
 	component.Base
 	dependencies struct {
@@ -28,7 +30,7 @@ func (lia *API) Routes() component.Routes {
 	}
 }
 
-// APISystem represents a system returned by the api
+// APISystem represents a system returned by the api.
 type APISystem struct {
 	Slug    string
 	URL     string

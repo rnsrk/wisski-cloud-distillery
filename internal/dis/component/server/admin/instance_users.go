@@ -1,11 +1,15 @@
+//spellchecker:words admin
 package admin
 
+//spellchecker:words context embed html template http github wisski distillery internal component instances server assets templating models status pkglib httpx form field julienschmidt httprouter golang maps slices
 import (
 	"context"
 	_ "embed"
+	"errors"
 	"fmt"
 	"html/template"
 	"net/http"
+	"net/url"
 
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/instances"
@@ -17,9 +21,10 @@ import (
 	"github.com/tkw1536/pkglib/httpx"
 	"github.com/tkw1536/pkglib/httpx/form/field"
 
+	"maps"
+	"slices"
+
 	"github.com/julienschmidt/httprouter"
-	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
 )
 
 //go:embed "html/instance_users.html"
@@ -82,13 +87,13 @@ func (admin *Admin) getGrantsUsers(r *http.Request) (gc instanceUsersContext, fu
 func (admin *Admin) postInstanceUsers(r *http.Request) (gc instanceUsersContext, funcs []templating.FlagFunc, err error) {
 	// parse the form
 	if err := r.ParseForm(); err != nil {
-		return gc, nil, err
+		return gc, nil, fmt.Errorf("failed to parse form: %w", err)
 	}
 
 	// read out the form values
 	var (
 		slug           = r.PostFormValue("slug")
-		delete         = r.PostFormValue("action") == "delete"
+		actionIsDelete = r.PostFormValue("action") == "delete"
 		distilleryUser = r.PostFormValue("distillery-user")
 		drupalUser     = r.PostFormValue("drupal-user")
 		adminRole      = r.PostFormValue("admin") == field.CheckboxChecked
@@ -100,11 +105,11 @@ func (admin *Admin) postInstanceUsers(r *http.Request) (gc instanceUsersContext,
 		return gc, nil, err
 	}
 
-	if delete {
+	if actionIsDelete {
 		// delete the user grant
 		err := admin.dependencies.Policy.Remove(r.Context(), distilleryUser, slug)
 		if err != nil {
-			return gc, nil, err
+			return gc, nil, fmt.Errorf("failer to remove user grant: %w", err)
 		}
 	} else {
 		// update the grant
@@ -130,20 +135,21 @@ func (admin *Admin) postInstanceUsers(r *http.Request) (gc instanceUsersContext,
 func (gc *instanceUsersContext) use(r *http.Request, slug string, admin *Admin) (funcs []templating.FlagFunc, err error) {
 	// find the instance itself
 	gc.instance, err = admin.dependencies.Instances.WissKI(r.Context(), slug)
-	if err == instances.ErrWissKINotFound {
+	if errors.Is(err, instances.ErrWissKINotFound) {
 		return nil, httpx.ErrNotFound
 	}
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get WissKI: %w", err)
 	}
 	gc.Instance = gc.instance.Instance
 
 	// replace the functions
+	escapedSlug := url.PathEscape(slug)
 	funcs = []templating.FlagFunc{
-		templating.ReplaceCrumb(menuInstance, component.MenuItem{Title: "Instance", Path: template.URL("/admin/instance/" + slug)}),
-		templating.ReplaceCrumb(menuGrants, component.MenuItem{Title: "Users & Grants", Path: template.URL("/admin/instance/" + slug + "/users")}),
+		templating.ReplaceCrumb(menuInstance, component.MenuItem{Title: "Instance", Path: template.URL("/admin/instance/" + escapedSlug)}),                // #nosec G203 -- escaped and safe
+		templating.ReplaceCrumb(menuGrants, component.MenuItem{Title: "Users & Grants", Path: template.URL("/admin/instance/" + escapedSlug + "/users")}), // #nosec G203 -- escaped and safe
 		templating.Title(gc.Instance.Slug + " - Users & Grants"),
-		admin.instanceTabs(slug, "users"),
+		admin.instanceTabs(escapedSlug, "users"),
 	}
 	return funcs, nil
 }
@@ -151,12 +157,12 @@ func (gc *instanceUsersContext) use(r *http.Request, slug string, admin *Admin) 
 func (gc *instanceUsersContext) useUsers(r *http.Request, admin *Admin) (err error) {
 	gc.Grants, err = admin.dependencies.Policy.Instance(r.Context(), gc.Instance.Slug)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get instance: %w", err)
 	}
 
 	users, err := admin.dependencies.Auth.Users(r.Context())
 	if err != nil {
-		return err
+		return fmt.Errorf("failer to get users: %w", err)
 	}
 
 	// create a namemap of users, but not those already taken
@@ -169,13 +175,13 @@ func (gc *instanceUsersContext) useUsers(r *http.Request, admin *Admin) (err err
 	}
 
 	// setup the usernames
-	gc.Usernames = maps.Keys(userNameMap)
+	gc.Usernames = slices.AppendSeq(make([]string, 0, len(userNameMap)), maps.Keys(userNameMap))
 	slices.Sort(gc.Usernames)
 
 	// get the drupal user data
 	gc.Users, err = gc.instance.Users().All(r.Context(), nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get all users: %w", err)
 	}
 	slices.SortFunc(gc.Users, func(a, b status.DrupalUser) int {
 		return int(a.UID) - int(b.UID)

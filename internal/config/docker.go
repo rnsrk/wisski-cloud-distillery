@@ -1,7 +1,8 @@
+//spellchecker:words config
 package config
 
 type DockerConfig struct {
-	NetworkPrefix string `yaml:"network" default:"distillery" validate:"nonempty"`
+	NetworkPrefix string `default:"distillery" validate:"nonempty" yaml:"network"`
 }
 
 // Networks returns a list of all docker networks to be created for purposes of the distillery.

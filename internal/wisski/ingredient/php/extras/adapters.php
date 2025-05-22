@@ -4,8 +4,15 @@
 /**
  * Creates an adapter for the distillery
  */
-function create_distillery_adapter(string $LABEL, string $MACHINE_NAME, string $DESCRIPTION, string $INSTANCE_DOMAIN, string $GRAPHDB_REPO, string $GRAPHDB_USER, string $GRAPHDB_PASSWORD) {
-
+function create_or_update_distillery_adapter(
+    string $LABEL, 
+    string $MACHINE_NAME,
+    string $DESCRIPTION,
+    string $INSTANCE_DOMAIN,
+    string $GRAPHDB_REPO,
+    string $GRAPHDB_USER,
+    string $GRAPHDB_PASSWORD
+): bool {
     //
     // PROPERTIES FOR THE ADAPTER
     //
@@ -18,7 +25,7 @@ function create_distillery_adapter(string $LABEL, string $MACHINE_NAME, string $
     $is_preferred_local_store = TRUE; // is_preferred_local_store
     $read_url = 'http://triplestore:7200/repositories/' . $GRAPHDB_REPO; // read_url
     $write_url = 'http://triplestore:7200/repositories/' . $GRAPHDB_REPO . '/statements'; // write_url
-    $is_federatable = TRUE; // is_federatable
+    $is_federatable = 0; // is_federatable
     $default_graph_uri = 'https://' . $INSTANCE_DOMAIN . '/';
     $same_as_properties = ['http://www.w3.org/2002/07/owl#sameAs']; // same_as_properties
     $ontology_graphs = []; // ontology_graphs
@@ -30,16 +37,24 @@ function create_distillery_adapter(string $LABEL, string $MACHINE_NAME, string $
         $header = base64_encode($header);
     }
     
+
     //
-    // Do the creation!
+    // Do the creation or update!
     //
     
     $storage = \Drupal::entityTypeManager()->getStorage('wisski_salz_adapter');
-    $adapter = $storage->create([
-        "id" => $id,
-        "label" => $label,
-        "description" => $description,
-    ]);
+    $adapter = $storage->load($id);
+    $created = false;
+
+    // TODO: There is a race condition here, but it should really be atomic. 
+    if(is_null($adapter)) {
+        $adapter = $storage->create([
+            "id" => $id,
+            "label" => $label,
+            "description" => $description,
+        ]);
+        $created = true;
+    }
     $adapter->setEngineConfig([
         "id" => $type,
         "machine-name" => $machine_name,
@@ -54,4 +69,6 @@ function create_distillery_adapter(string $LABEL, string $MACHINE_NAME, string $
         "ontology_graphs" => $ontology_graphs,
     ]);
     $adapter->save();
+
+    return $created;
 }

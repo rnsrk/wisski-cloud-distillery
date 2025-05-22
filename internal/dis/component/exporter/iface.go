@@ -1,5 +1,7 @@
+//spellchecker:words exporter
 package exporter
 
+//spellchecker:words context errors path filepath github wisski distillery internal component models logging targz pkglib collection umaskfree status
 import (
 	"context"
 	"errors"
@@ -19,8 +21,7 @@ import (
 	"github.com/tkw1536/pkglib/status"
 )
 
-// ExportTask describes a task that makes either a [Backup] or a [Snapshot].
-// See [Exporter.MakeExport]
+// See [Exporter.MakeExport].
 type ExportTask struct {
 	// Dest is the destination path to write the backup to.
 	// When empty, this is created automatically in the staging or archive directory.
@@ -45,7 +46,7 @@ type ExportTask struct {
 	SnapshotDescription SnapshotDescription
 }
 
-// export is implemented by [Backup] and [Snapshot]
+// export is implemented by [Backup] and [Snapshot].
 type export interface {
 	LogEntry() models.Export
 	// ReportPlain writes a plaintext report summary into w
@@ -54,7 +55,7 @@ type export interface {
 	ReportMachine(w io.Writer) error
 }
 
-// Parts lists all available snapshot parts
+// Parts lists all available snapshot parts.
 func (exporter *Exporter) Parts() []string {
 	return collection.MapSlice(exporter.dependencies.Snapshotable, func(c component.Snapshotable) string { return c.SnapshotName() })
 }
@@ -67,7 +68,6 @@ const (
 // MakeExport performs an export task as described by flags.
 // Output is directed to the provided io.
 func (exporter *Exporter) MakeExport(ctx context.Context, progress io.Writer, task ExportTask) (err error) {
-
 	// extract parameters
 	Title := "Backup"
 	Slug := ""
@@ -77,7 +77,9 @@ func (exporter *Exporter) MakeExport(ctx context.Context, progress io.Writer, ta
 	}
 
 	// determine target paths
-	logging.LogMessage(progress, "Determining target paths")
+	if _, err := logging.LogMessage(progress, "Determining target paths"); err != nil {
+		return fmt.Errorf("failed to log message: %w", err)
+	}
 	var stagingDir, archivePath string
 	if task.StagingOnly {
 		stagingDir = task.Dest
@@ -93,22 +95,25 @@ func (exporter *Exporter) MakeExport(ctx context.Context, progress io.Writer, ta
 	if !task.StagingOnly && archivePath == "" {
 		archivePath = exporter.NewArchivePath(Slug)
 	}
-	fmt.Fprintf(progress, "Staging Directory: %s\n", stagingDir)
-	fmt.Fprintf(progress, "Archive Path:      %s\n", archivePath)
+	_, _ = fmt.Fprintf(progress, "Staging Directory: %s\n", stagingDir)
+	_, _ = fmt.Fprintf(progress, "Archive Path:      %s\n", archivePath)
 
 	// create the staging directory
-	logging.LogMessage(progress, "Creating staging directory")
+	if _, err := logging.LogMessage(progress, "Creating staging directory"); err != nil {
+		return fmt.Errorf("failed to log message: %w", err)
+	}
 	err = umaskfree.Mkdir(stagingDir, umaskfree.DefaultDirPerm)
-	if !errors.Is(err, fs.ErrExist) && err != nil {
-		return err
+	if err != nil && !errors.Is(err, fs.ErrExist) {
+		return fmt.Errorf("failed to create staging directory: %w", err)
 	}
 
 	// if it was requested to not do staging only
 	// we need the staging directory to be deleted at the end
 	if !task.StagingOnly {
 		defer func() {
-			logging.LogMessage(progress, "Removing staging directory")
-			os.RemoveAll(stagingDir)
+			// #nosec G104
+			logging.LogMessage(progress, "Removing staging directory") //nolint:errcheck // no way to report error
+			_ = os.RemoveAll(stagingDir)
 		}()
 	}
 
@@ -116,7 +121,7 @@ func (exporter *Exporter) MakeExport(ctx context.Context, progress io.Writer, ta
 	// write out the report
 	// and retain a log entry
 	var entry models.Export
-	logging.LogOperation(func() error {
+	_ = logging.LogOperation(func() error {
 		var export export
 		if task.Instance == nil {
 			task.BackupDescription.Dest = stagingDir
@@ -134,30 +139,30 @@ func (exporter *Exporter) MakeExport(ctx context.Context, progress io.Writer, ta
 		// write the machine report
 		{
 			reportPath := filepath.Join(stagingDir, ReportMachinePath)
-			fmt.Fprintln(progress, reportPath)
+			_, _ = fmt.Fprintln(progress, reportPath)
 
 			report, err := umaskfree.Create(reportPath, umaskfree.DefaultFilePerm)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to create report file: %w", err)
 			}
 
 			if err := export.ReportMachine(report); err != nil {
-				return err
+				return fmt.Errorf("failed to generate report: %w", err)
 			}
 		}
 
 		// write the plaintext report
 		{
 			reportPath := filepath.Join(stagingDir, ReportPlainPath)
-			fmt.Fprintln(progress, reportPath)
+			_, _ = fmt.Fprintln(progress, reportPath)
 
 			report, err := umaskfree.Create(reportPath, umaskfree.DefaultFilePerm)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to create file: %w", err)
 			}
 
 			if err := export.ReportPlain(report); err != nil {
-				return err
+				return fmt.Errorf("failed to generate report: %w", err)
 			}
 		}
 
@@ -167,21 +172,24 @@ func (exporter *Exporter) MakeExport(ctx context.Context, progress io.Writer, ta
 	// if we only requested staging
 	// all that is left is to write the log entry
 	if task.StagingOnly {
-		fmt.Fprintln(progress, "Writing Log Entry")
+		_, _ = fmt.Fprintln(progress, "Writing Log Entry")
 
 		// write out the log entry
 		entry.Path = stagingDir
 		entry.Packed = false
-		exporter.dependencies.ExporterLogger.Add(ctx, entry)
+		if err := exporter.dependencies.ExporterLogger.Add(ctx, entry); err != nil {
+			return fmt.Errorf("failed to add log entry entry: %w", err)
+		}
 
-		fmt.Fprintf(progress, "Wrote %s\n", stagingDir)
+		if _, err := fmt.Fprintf(progress, "Wrote %s\n", stagingDir); err != nil {
+			return fmt.Errorf("failed to report progress: %w", err)
+		}
 		return nil
 	}
 
-	// package everything up as an archive!
 	if err := logging.LogOperation(func() error {
 		var count int64
-		defer func() { fmt.Fprintf(progress, "Wrote %d byte(s) to %s\n", count, archivePath) }()
+		defer func() { _, _ = fmt.Fprintf(progress, "Wrote %d byte(s) to %s\n", count, archivePath) }()
 
 		st := status.NewWithCompat(progress, 1)
 		st.Start()
@@ -191,17 +199,23 @@ func (exporter *Exporter) MakeExport(ctx context.Context, progress io.Writer, ta
 			st.Set(0, dst)
 		})
 
-		return err
+		if err != nil {
+			return fmt.Errorf("failed to package archive: %w", err)
+		}
+		return nil
 	}, progress, "Writing archive"); err != nil {
-		return err
+		return fmt.Errorf("failed to write archive: %w", err)
 	}
 
-	// write out the log entry
-	logging.LogMessage(progress, "Writing Log Entry")
+	if _, err := logging.LogMessage(progress, "Writing Log Entry"); err != nil {
+		return fmt.Errorf("failed to log message: %w", err)
+	}
+
 	entry.Path = archivePath
 	entry.Packed = true
-	exporter.dependencies.ExporterLogger.Add(ctx, entry)
 
-	// and we're done!
+	if err := exporter.dependencies.ExporterLogger.Add(ctx, entry); err != nil {
+		return fmt.Errorf("failed to log backup: %w", err)
+	}
 	return nil
 }

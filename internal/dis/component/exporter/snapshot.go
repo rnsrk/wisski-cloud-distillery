@@ -1,5 +1,7 @@
+//spellchecker:words exporter
 package exporter
 
+//spellchecker:words context path filepath time github wisski distillery internal component models wdlog ingredient locker logging pkglib collection contextx status golang maps slices
 import (
 	"context"
 	"fmt"
@@ -8,20 +10,22 @@ import (
 	"path/filepath"
 	"time"
 
+	"maps"
+	"slices"
+
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component"
 	"github.com/FAU-CDI/wisski-distillery/internal/models"
+	"github.com/FAU-CDI/wisski-distillery/internal/wdlog"
 	"github.com/FAU-CDI/wisski-distillery/internal/wisski"
 	"github.com/FAU-CDI/wisski-distillery/internal/wisski/ingredient/locker"
 	"github.com/FAU-CDI/wisski-distillery/pkg/logging"
-	"github.com/rs/zerolog"
 	"github.com/tkw1536/pkglib/collection"
 	"github.com/tkw1536/pkglib/contextx"
+	"github.com/tkw1536/pkglib/errorsx"
 	"github.com/tkw1536/pkglib/status"
-	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
 )
 
-// SnapshotDescription is a description for a snapshot
+// SnapshotDescription is a description for a snapshot.
 type SnapshotDescription struct {
 	Dest      string // destination path
 	Keepalive bool   // should we keep the instance alive while making the snapshot?
@@ -29,7 +33,9 @@ type SnapshotDescription struct {
 	Parts []string // SnapshotName()s of the components to include.
 }
 
-// Snapshot represents the result of generating a snapshot
+// Snapshot represents the result of generating a snapshot.
+//
+//nolint:recvcheck
 type Snapshot struct {
 	Description SnapshotDescription
 	Instance    models.Instance
@@ -57,21 +63,22 @@ type Snapshot struct {
 	partsStopped []component.Snapshotable `json:"-"`
 }
 
-// Snapshot creates a new snapshot of this instance into dest
+// Snapshot creates a new snapshot of this instance into dest.
 func (exporter *Exporter) NewSnapshot(ctx context.Context, instance *wisski.WissKI, progress io.Writer, desc SnapshotDescription) (snapshot Snapshot) {
-
-	logging.LogMessage(progress, "Locking instance")
+	// #nosec G104
+	logging.LogMessage(progress, "Locking instance") //nolint:errcheck // no way to report error
 	if !instance.Locker().TryLock(ctx) {
-		err := locker.Locked
-		fmt.Fprintln(progress, err)
-		fmt.Fprintln(progress, "Aborting snapshot creation")
+		err := locker.ErrLocked
+		_, _ = fmt.Fprintln(progress, err)
+		_, _ = fmt.Fprintln(progress, "Aborting snapshot creation")
 
 		return Snapshot{
 			ErrPanic: err,
 		}
 	}
 	defer func() {
-		logging.LogMessage(progress, "Unlocking instance")
+		// #nosec G104
+		logging.LogMessage(progress, "Unlocking instance") //nolint:errcheck // no way to report error
 
 		ctx, cancel := contextx.Anyways(ctx, time.Second)
 		defer cancel()
@@ -90,7 +97,7 @@ func (exporter *Exporter) NewSnapshot(ctx context.Context, instance *wisski.Wiss
 	}()
 
 	// do the create keeping track of time!
-	logging.LogOperation(func() error {
+	_ = logging.LogOperation(func() error {
 		snapshot.StartTime = time.Now().UTC()
 
 		wboxerr, wboxmsg := snapshot.makeParts(ctx, progress, exporter, instance, false)
@@ -136,12 +143,15 @@ func (snapshots *Exporter) resolveParts(ctx context.Context, parts []string, sna
 
 		// throw a warning for unknown parts
 		for key := range keys {
-			zerolog.Ctx(ctx).Warn().Str("part", key).Msg("ignoring unknown snapshot part")
+			wdlog.Of(ctx).Warn(
+				"ignoring unknown snapshot part",
+				"part", key,
+			)
 		}
 	}
 
 	// sort the names of all requested parts
-	snapshot.Description.Parts = maps.Keys(partMap)
+	snapshot.Description.Parts = slices.AppendSeq(make([]string, 0, len(partMap)), maps.Keys(partMap))
 	slices.Sort(snapshot.Description.Parts)
 
 	// and setup the map for running and stopped parts!
@@ -159,11 +169,11 @@ func (snapshot *Snapshot) makeParts(ctx context.Context, progress io.Writer, _ *
 	if !needsRunning && !snapshot.Description.Keepalive {
 		stack := instance.Barrel().Stack()
 
-		logging.LogMessage(progress, "Stopping instance")
+		_, _ = logging.LogMessage(progress, "Stopping instance")
 		snapshot.ErrStop = stack.Down(ctx, progress)
 
 		defer func() {
-			logging.LogMessage(progress, "Starting instance")
+			_, _ = logging.LogMessage(progress, "Starting instance")
 			snapshot.ErrStart = stack.Up(ctx, progress)
 		}()
 	}
@@ -219,14 +229,21 @@ func (snapshot *Snapshot) makeParts(ctx context.Context, progress io.Writer, _ *
 
 		// read the logfile
 		logfile := files[ids[i]]
-		bytes, err := os.ReadFile(logfile)
+		bytes, err := os.ReadFile(logfile) // #nosec G304 -- logfile set dynamically
 		if err != nil {
-			zerolog.Ctx(ctx).Err(err).Str("component", name).Msg("unable to copy logfile")
+			wdlog.Of(ctx).Error(
+				"unable to copy logfile",
+				"error", err,
+				"component", name,
+			)
 			continue
 		}
 
 		// delete it, but store the content in the results
-		os.Remove(logfile)
+		if err := os.Remove(logfile); err != nil {
+			err = fmt.Errorf("failed to remove logfile: %w", err)
+			errmap[name] = errorsx.Combine(errmap[name], err)
+		}
 		logmap[name] = string(bytes)
 	}
 

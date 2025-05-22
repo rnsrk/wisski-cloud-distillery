@@ -1,19 +1,21 @@
+//spellchecker:words templating
 package templating
 
+//spellchecker:words html template http reflect time github wisski distillery internal component server assets wdlog golang slices
 import (
 	"fmt"
 	"html/template"
 	"net/http"
 	"reflect"
+	"slices"
 	"time"
 
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/server/assets"
-	"github.com/rs/zerolog"
-	"golang.org/x/exp/slices"
+	"github.com/FAU-CDI/wisski-distillery/internal/wdlog"
 )
 
-// Flags represent handle-updatable options for the base template
+// Flags represent handle-updatable options for the base template.
 type Flags struct {
 	Title         string // Title of the menu
 	assets.Assets        // assets are the assets included in the template
@@ -23,7 +25,7 @@ type Flags struct {
 	Actions []component.MenuItem // actions are the actions available to a specific thingy
 }
 
-// Apply applies a set of functions to this flags
+// Apply applies a set of functions to this flags.
 func (flags Flags) Apply(r *http.Request, funcs ...FlagFunc) Flags {
 	for _, f := range funcs {
 		flags = f(flags, r)
@@ -42,19 +44,19 @@ type RuntimeFlags struct {
 	CSRF        template.HTML        // csrf data (if any)
 }
 
-// Returns how long this request took to render
+// Returns how long this request took to render.
 func (rf RuntimeFlags) Took() time.Duration {
 	return time.Since(rf.StartedAt)
 }
 func (rf RuntimeFlags) TookHTML() template.HTML {
 	took := rf.Took()
 
-	return template.HTML(fmt.Sprintf("<time datetime=\"P%.3f\">%s</time>", took.Seconds(), took))
+	return template.HTML(fmt.Sprintf("<time datetime=\"P%.3f\">%s</time>", took.Seconds(), took)) // #nosec G203 -- we know it's safe html
 }
 
 var runtimeFlagsName = reflect.TypeFor[RuntimeFlags]().Name()
 
-// Clone clones this flags
+// Clone clones this flags.
 func (flags Flags) Clone() Flags {
 	flags.Crumbs = slices.Clone(flags.Crumbs)
 	flags.Actions = slices.Clone(flags.Actions)
@@ -65,15 +67,15 @@ func (flags Flags) Clone() Flags {
 // FlagFunc may not be nil.
 type FlagFunc func(flags Flags, r *http.Request) Flags
 
-// Assets sets the given assets for the given flags
-func Assets(Assets assets.Assets) FlagFunc {
+// Assets sets the given assets for the given flags.
+func Assets(assets assets.Assets) FlagFunc {
 	return func(flags Flags, r *http.Request) Flags {
-		flags.Assets = Assets
+		flags.Assets = assets
 		return flags
 	}
 }
 
-// Crumbs sets the crumbs
+// Crumbs sets the crumbs.
 func Crumbs(crumbs ...component.MenuItem) FlagFunc {
 	return func(flags Flags, r *http.Request) Flags {
 		flags.Crumbs = slices.Clone(crumbs)
@@ -81,7 +83,7 @@ func Crumbs(crumbs ...component.MenuItem) FlagFunc {
 	}
 }
 
-// Actions sets the actions
+// Actions sets the actions.
 func Actions(actions ...component.MenuItem) FlagFunc {
 	return func(flags Flags, r *http.Request) Flags {
 		flags.Actions = slices.Clone(actions)
@@ -89,7 +91,7 @@ func Actions(actions ...component.MenuItem) FlagFunc {
 	}
 }
 
-// Tabs sets the tabs
+// Tabs sets the tabs.
 func Tabs(actions ...component.MenuItem) FlagFunc {
 	return func(flags Flags, r *http.Request) Flags {
 		flags.Tabs = slices.Clone(actions)
@@ -97,37 +99,49 @@ func Tabs(actions ...component.MenuItem) FlagFunc {
 	}
 }
 
-// ReplaceCrumb replaces a specific crum
-func ReplaceCrumb(old component.MenuItem, action component.MenuItem) FlagFunc {
+// ReplaceCrumb replaces a specific crum.
+func ReplaceCrumb(old component.MenuItem, crumb component.MenuItem) FlagFunc {
 	return func(flags Flags, r *http.Request) Flags {
-		if !old.ReplaceWith(action, flags.Crumbs) {
-			zerolog.Ctx(r.Context()).Warn().Str("action", fmt.Sprint(action)).Str("actions", fmt.Sprint(flags.Actions)).Msg("did not replace menu item")
+		if !old.ReplaceWith(crumb, flags.Crumbs) {
+			wdlog.Of(r.Context()).Warn(
+				"did not replace crumb item",
+				"crum", fmt.Sprint(crumb),
+				"crumbs", fmt.Sprint(flags.Crumbs),
+			)
 		}
 		return flags
 	}
 }
 
-// ReplaceAction replaces a specific action
+// ReplaceAction replaces a specific action.
 func ReplaceAction(old component.MenuItem, action component.MenuItem) FlagFunc {
 	return func(flags Flags, r *http.Request) Flags {
 		if !old.ReplaceWith(action, flags.Actions) {
-			zerolog.Ctx(r.Context()).Warn().Str("action", fmt.Sprint(action)).Str("actions", fmt.Sprint(flags.Actions)).Msg("did not replace menu item")
+			wdlog.Of(r.Context()).Warn(
+				"did not replace action item",
+				"action", fmt.Sprint(action),
+				"actions", fmt.Sprint(flags.Actions),
+			)
 		}
 		return flags
 	}
 }
 
-// ReplaceTab replaces a specific tab
+// ReplaceTab replaces a specific tab.
 func ReplaceTab(old component.MenuItem, tab component.MenuItem) FlagFunc {
 	return func(flags Flags, r *http.Request) Flags {
 		if !old.ReplaceWith(tab, flags.Tabs) {
-			zerolog.Ctx(r.Context()).Warn().Str("tab", fmt.Sprint(tab)).Str("tabs", fmt.Sprint(flags.Tabs)).Msg("did not replace menu item")
+			wdlog.Of(r.Context()).Warn(
+				"did not replace menu item",
+				"tab", fmt.Sprint(tab),
+				"tabs", fmt.Sprint(flags.Tabs),
+			)
 		}
 		return flags
 	}
 }
 
-// Title sets the title of this template
+// Title sets the title of this template.
 func Title(title string) FlagFunc {
 	return func(flags Flags, r *http.Request) Flags {
 		flags.Title = title

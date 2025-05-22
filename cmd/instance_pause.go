@@ -1,19 +1,22 @@
 package cmd
 
+//spellchecker:words github wisski distillery internal goprogram exit
 import (
+	"fmt"
+
 	wisski_distillery "github.com/FAU-CDI/wisski-distillery"
 	"github.com/FAU-CDI/wisski-distillery/internal/cli"
 	"github.com/tkw1536/goprogram/exit"
 )
 
-// InstancePause is the 'instance_pause' command
+// InstancePause is the 'instance_pause' command.
 var InstancePause wisski_distillery.Command = instancepause{}
 
 type instancepause struct {
-	Stop        bool `short:"d" long:"stop" description:"stop instance"`
-	Start       bool `short:"u" long:"start" description:"start (or restart) instance"`
+	Stop        bool `description:"stop instance"               long:"stop"  short:"d"`
+	Start       bool `description:"start (or restart) instance" long:"start" short:"u"`
 	Positionals struct {
-		Slug string `positional-arg-name:"slug" required:"1-1" description:"name of instance to purge"`
+		Slug string `description:"name of instance to purge" positional-arg-name:"slug" required:"1-1"`
 	} `positional-args:"true"`
 }
 
@@ -34,20 +37,23 @@ func (i instancepause) AfterParse() error {
 	return nil
 }
 
-var errInstancePauseWissKI = exit.Error{
-	Message:  "unable to get WissKI",
-	ExitCode: exit.ExitGeneric,
-}
+var errInstancePauseWissKI = exit.NewErrorWithCode("unable to get WissKI", exit.ExitGeneric)
 
 func (i instancepause) Run(context wisski_distillery.Context) error {
 	instance, err := context.Environment.Instances().WissKI(context.Context, i.Positionals.Slug)
 	if err != nil {
-		return errInstancePauseWissKI.WrapError(err)
+		return fmt.Errorf("%w: %w", errInstancePauseWissKI, err)
 	}
 
+	stack := instance.Barrel().Stack()
 	if i.Stop {
-		return instance.Barrel().Stack().Down(context.Context, context.Stdout)
+		if err := stack.Down(context.Context, context.Stdout); err != nil {
+			return fmt.Errorf("failed to stop instance: %w", err)
+		}
 	} else {
-		return instance.Barrel().Stack().Up(context.Context, context.Stdout)
+		if err := stack.Up(context.Context, context.Stdout); err != nil {
+			return fmt.Errorf("failed to start instance: %w", err)
+		}
 	}
+	return nil
 }

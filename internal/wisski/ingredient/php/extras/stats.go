@@ -1,5 +1,7 @@
+//spellchecker:words extras
 package extras
 
+//spellchecker:words context embed github wisski distillery internal phpx status ingredient
 import (
 	"context"
 	_ "embed"
@@ -24,7 +26,7 @@ var (
 //go:embed stats.php
 var statsPHP string
 
-// Get fetches all statistics from the server
+// Get fetches all statistics from the server.
 func (stats *Stats) Get(ctx context.Context, server *phpx.Server) (data status.Statistics, err error) {
 	err = stats.dependencies.PHP.ExecScript(ctx, server, &data, statsPHP, "export_statistics")
 	return

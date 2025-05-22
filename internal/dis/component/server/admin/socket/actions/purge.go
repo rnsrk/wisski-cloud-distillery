@@ -1,7 +1,10 @@
+//spellchecker:words actions
 package actions
 
+//spellchecker:words context github wisski distillery internal component auth scopes instances purger
 import (
 	"context"
+	"fmt"
 	"io"
 
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component"
@@ -32,5 +35,8 @@ func (*Purge) Action() InstanceAction {
 }
 
 func (p *Purge) Act(ctx context.Context, instance *wisski.WissKI, in io.Reader, out io.Writer, params ...string) (any, error) {
-	return nil, p.dependencies.Purger.Purge(ctx, out, instance.Slug)
+	if err := p.dependencies.Purger.Purge(ctx, out, instance.Slug); err != nil {
+		return nil, fmt.Errorf("failed to purge system: %w", err)
+	}
+	return nil, nil
 }

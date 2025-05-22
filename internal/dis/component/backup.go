@@ -1,17 +1,21 @@
+//spellchecker:words component
 package component
 
+//spellchecker:words context path filepath github wisski distillery internal models errors pkglib umaskfree
 import (
 	"context"
 	"fmt"
 	"io"
 	"path/filepath"
 
+	"errors"
+
 	"github.com/FAU-CDI/wisski-distillery/internal/models"
-	"github.com/pkg/errors"
+	"github.com/tkw1536/pkglib/errorsx"
 	"github.com/tkw1536/pkglib/fsx/umaskfree"
 )
 
-// Backupable represents a component with a Backup method
+// Backupable represents a component with a Backup method.
 type Backupable interface {
 	Component
 
@@ -36,7 +40,7 @@ type Snapshotable interface {
 	Snapshot(wisski models.Instance, context *StagingContext) error
 }
 
-// NewStagingContext returns a new [StagingContext]
+// NewStagingContext returns a new [StagingContext].
 func NewStagingContext(ctx context.Context, progress io.Writer, path string, manifest chan<- string) *StagingContext {
 	return &StagingContext{
 		ctx:      ctx,
@@ -46,7 +50,9 @@ func NewStagingContext(ctx context.Context, progress io.Writer, path string, man
 	}
 }
 
-// StagingContext is a context used for [Backupable] and [Snapshotable]
+// StagingContext is a context used for [Backupable] and [Snapshotable].
+//
+//nolint:containedctx // TODO: Move this out of the context
 type StagingContext struct {
 	ctx      context.Context
 	progress io.Writer     // writer to direct progress to
@@ -60,7 +66,7 @@ func (bc *StagingContext) sendPath(path string) {
 		var err error
 		path, err = bc.resolve(path)
 		if err != nil {
-			fmt.Fprintf(bc.progress, "path resolve error: %s", err)
+			_, _ = fmt.Fprintf(bc.progress, "path resolve error: %s", err)
 			return
 		}
 	}
@@ -68,7 +74,7 @@ func (bc *StagingContext) sendPath(path string) {
 	// use the relative path for logging
 	rel, err := bc.relativize(path)
 	if err == nil {
-		io.WriteString(bc.progress, rel+"\n")
+		_, _ = io.WriteString(bc.progress, rel+"\n")
 	}
 
 	// send the absolute path
@@ -95,12 +101,16 @@ func (bc *StagingContext) resolve(path string) (dest string, err error) {
 	return filepath.Join(bc.path, path), nil
 }
 
-func (bc *StagingContext) relativize(path string) (dest string, err error) {
+func (bc *StagingContext) relativize(path string) (string, error) {
 	if !filepath.IsAbs(path) {
 		return "", errRelativeRelative
 	}
 
-	return filepath.Rel(bc.path, path)
+	dest, err := filepath.Rel(bc.path, path)
+	if err != nil {
+		return "", fmt.Errorf("failed to get relative path: %w", err)
+	}
+	return dest, nil
 }
 
 // AddDirectory creates a new directory inside the destination.
@@ -121,7 +131,7 @@ func (sc *StagingContext) AddDirectory(path string, op func(context.Context) err
 
 	// run the make directory
 	if err := umaskfree.Mkdir(dst, umaskfree.DefaultDirPerm); err != nil {
-		return err
+		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
 	// tell the files that we are creating it!
@@ -142,7 +152,10 @@ func (sc *StagingContext) CopyFile(dst, src string) error {
 		return err
 	}
 	sc.sendPath(dst)
-	return umaskfree.CopyFile(sc.ctx, dstPath, src)
+	if err := umaskfree.CopyFile(sc.ctx, dstPath, src); err != nil {
+		return fmt.Errorf("failed to copy file: %w", err)
+	}
+	return nil
 }
 
 // CopyDirectory copies a directory from src to dst.
@@ -156,9 +169,12 @@ func (sc *StagingContext) CopyDirectory(dst, src string) error {
 		return err
 	}
 
-	return umaskfree.CopyDirectory(sc.ctx, dstPath, src, func(dst, src string) {
+	if err := umaskfree.CopyDirectory(sc.ctx, dstPath, src, func(dst, src string) {
 		sc.sendPath(dst)
-	})
+	}); err != nil {
+		return fmt.Errorf("failed to copy directory: %w", err)
+	}
+	return nil
 }
 
 // AddFile creates a new file at the provided path inside the destination.
@@ -169,7 +185,7 @@ func (sc *StagingContext) CopyDirectory(dst, src string) error {
 // The op function must not retain file.
 // The underlying file does not need to be closed.
 // AddFile will not return before op has returned.
-func (sc *StagingContext) AddFile(path string, op func(ctx context.Context, file io.Writer) error) error {
+func (sc *StagingContext) AddFile(path string, op func(ctx context.Context, file io.Writer) error) (e error) {
 	// check if we're already done
 	if err, ok := sc.ctxdone(); ok {
 		return err
@@ -184,9 +200,9 @@ func (sc *StagingContext) AddFile(path string, op func(ctx context.Context, file
 	// create the file
 	file, err := umaskfree.Create(dst, umaskfree.DefaultFilePerm)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create default file: %w", err)
 	}
-	defer file.Close()
+	defer errorsx.Close(file, &e, "file")
 
 	// tell them that we are creating it!
 	sc.sendPath(path)

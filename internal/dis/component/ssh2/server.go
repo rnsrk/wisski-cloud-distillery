@@ -1,5 +1,6 @@
 package ssh2
 
+//spellchecker:words context github gliderlabs
 import (
 	"context"
 	"io"
@@ -12,7 +13,7 @@ const (
 	eot rune = 4
 )
 
-// Server returns an ssh server that implements the main ssh server
+// Server returns an ssh server that implements the main ssh server.
 func (ssh2 *SSH2) Server(ctx context.Context, privateKeyPath string, progress io.Writer) (*ssh.Server, error) {
 	var server ssh.Server
 

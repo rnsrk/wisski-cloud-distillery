@@ -1,6 +1,8 @@
 package cmd
 
+//spellchecker:words github wisski distillery internal goprogram exit
 import (
+	"fmt"
 	"net"
 
 	wisski_distillery "github.com/FAU-CDI/wisski-distillery"
@@ -8,12 +10,12 @@ import (
 	"github.com/tkw1536/goprogram/exit"
 )
 
-// SSH is the 'ssh' command
+// SSH is the 'ssh' command.
 var SSH wisski_distillery.Command = ssh{}
 
 type ssh struct {
-	Bind           string `short:"b" long:"bind" description:"address to listen on" default:"127.0.0.1:2223"`
-	PrivateKeyPath string `short:"p" long:"private-key-path" description:"path to store private host keys in" required:"1"`
+	Bind           string `default:"127.0.0.1:2223"                         description:"address to listen on" long:"bind"  short:"b"`
+	PrivateKeyPath string `description:"path to store private host keys in" long:"private-key-path"            required:"1" short:"p"`
 }
 
 func (s ssh) Description() wisski_distillery.Description {
@@ -26,37 +28,35 @@ func (s ssh) Description() wisski_distillery.Description {
 	}
 }
 
-var errSSHServer = exit.Error{
-	ExitCode: exit.ExitGeneric,
-	Message:  "unable to listen server",
-}
-
-var errSSHListen = exit.Error{
-	ExitCode: exit.ExitGeneric,
-	Message:  "unable to listen",
-}
+var (
+	errSSHServer = exit.NewErrorWithCode("unable to listen server", exit.ExitGeneric)
+	errSSHListen = exit.NewErrorWithCode("unable to listen", exit.ExitGeneric)
+)
 
 func (s ssh) Run(context wisski_distillery.Context) error {
 	dis := context.Environment
 	server, err := dis.SSH().Server(context.Context, s.PrivateKeyPath, context.Stderr)
 	if err != nil {
-		return errSSHServer.WrapError(err)
+		return fmt.Errorf("%w: %w", errSSHServer, err)
 	}
 
-	context.Printf("Listening on %s\n", s.Bind)
+	_, _ = context.Printf("Listening on %s\n", s.Bind)
 
 	// make a new listener
 	listener, err := net.Listen("tcp", s.Bind)
 	if err != nil {
-		return errSSHListen.WrapError(err)
+		return fmt.Errorf("%w: %w", errSSHListen, err)
 	}
 
 	go func() {
 		<-context.Context.Done()
-		listener.Close()
+		_ = listener.Close() // it is either closed or it isn't
 	}()
 
 	// and serve that listener
 	err = server.Serve(listener)
-	return errServerListen.WrapError(err)
+	if err != nil {
+		return fmt.Errorf("%w: %w", errServerListen, err)
+	}
+	return nil
 }

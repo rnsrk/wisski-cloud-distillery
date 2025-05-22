@@ -1,5 +1,6 @@
 package sql
 
+//spellchecker:words context errors reflect time github wisski distillery internal component logging goprogram exit pkglib sqlx stream timex
 import (
 	"context"
 	"errors"
@@ -10,7 +11,6 @@ import (
 
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component"
 	"github.com/FAU-CDI/wisski-distillery/pkg/logging"
-	"github.com/tkw1536/goprogram/exit"
 	"github.com/tkw1536/pkglib/sqlx"
 	"github.com/tkw1536/pkglib/stream"
 	"github.com/tkw1536/pkglib/timex"
@@ -25,7 +25,7 @@ func (sql *SQL) Shell(ctx context.Context, io stream.IOStream, argv ...string) i
 
 var errSQLNotFound = errors.New("internal error: unsafeWaitShell: sql client not found")
 
-// unsafeWaitShell waits for a connection via the database shell to succeed
+// unsafeWaitShell waits for a connection via the database shell to succeed.
 func (sql *SQL) unsafeWaitShell(ctx context.Context) (err error) {
 	defer func() {
 		// catch the errSQLNotFound
@@ -34,15 +34,14 @@ func (sql *SQL) unsafeWaitShell(ctx context.Context) (err error) {
 			return
 		}
 
-		// other panic => keep panicking
-		if r != errSQLNotFound {
-			panic(r)
+		// if we simply didn't find the sql, don't panic!
+		if e, ok := r.(error); ok && errors.Is(e, errSQLNotFound) {
+			err = e
+			return
 		}
-
-		err = errSQLNotFound
 	}()
 
-	return timex.TickUntilFunc(func(time.Time) bool {
+	if err := timex.TickUntilFunc(func(time.Time) bool {
 		code := sql.Shell(ctx, stream.FromNil(), "-e", "select 1;")
 
 		// special case: executable was not found in the docker container.
@@ -51,7 +50,10 @@ func (sql *SQL) unsafeWaitShell(ctx context.Context) (err error) {
 			panic(errSQLNotFound)
 		}
 		return code == 0
-	}, ctx, sql.PollInterval)
+	}, ctx, sql.PollInterval); err != nil {
+		return fmt.Errorf("failed to wait for sql: %w", err)
+	}
+	return nil
 }
 
 // unsafeQuery shell executes a raw database query.
@@ -60,12 +62,10 @@ func (sql *SQL) unsafeQueryShell(ctx context.Context, query string) bool {
 	return code == 0
 }
 
-var errSQLUnableToCreateUser = errors.New("unable to create administrative user")
-var errSQLUnsafeDatabaseName = errors.New("distillery database has an unsafe name")
-var errSQLUnableToMigrate = exit.Error{
-	Message:  "unable to migrate %s table: %s",
-	ExitCode: exit.ExitGeneric,
-}
+var (
+	errSQLUnableToCreateUser = errors.New("unable to create administrative user")
+	errSQLUnsafeDatabaseName = errors.New("distillery database has an unsafe name")
+)
 
 // Update initializes or updates the SQL database.
 func (sql *SQL) Update(ctx context.Context, progress io.Writer) error {
@@ -76,7 +76,10 @@ func (sql *SQL) Update(ctx context.Context, progress io.Writer) error {
 		if err := sql.unsafeWaitShell(ctx); err != nil {
 			return err
 		}
-		logging.LogMessage(progress, "Creating administrative user")
+		if _, err := logging.LogMessage(progress, "Creating administrative user"); err != nil {
+			return fmt.Errorf("failed to log message: %w", err)
+		}
+
 		{
 			username := config.AdminUsername
 			password := config.AdminPassword
@@ -87,39 +90,48 @@ func (sql *SQL) Update(ctx context.Context, progress io.Writer) error {
 	}
 
 	// create the admin user
-	logging.LogMessage(progress, "Creating sql database")
+	if _, err := logging.LogMessage(progress, "Creating sql database"); err != nil {
+		return fmt.Errorf("failed to log message: %w", err)
+	} //  shouldn't abort cause logging failed
 	{
 		if !sqlx.IsSafeDatabaseLiteral(config.Database) {
 			return errSQLUnsafeDatabaseName
 		}
 		createDBSQL := fmt.Sprintf("CREATE DATABASE IF NOT EXISTS `%s`;", config.Database)
 		if err := sql.Exec(createDBSQL); err != nil {
-			return err
+			return fmt.Errorf("failed to create database: %w", err)
 		}
 	}
 
 	// wait for the database to come up
-	logging.LogMessage(progress, "Waiting for database update to be complete")
+	if _, err := logging.LogMessage(progress, "Waiting for database update to be complete"); err != nil {
+		return fmt.Errorf("failed to log message: %w", err)
+	} //  shouldn't abort cause logging failed
 	if err := sql.WaitQueryTable(ctx); err != nil {
-		return err
+		return fmt.Errorf("failed to wait for database: %w", err)
 	}
 
 	// migrate all of the tables!
-	return logging.LogOperation(func() error {
+	if err := logging.LogOperation(func() error {
 		for _, table := range sql.dependencies.Tables {
 			info := table.TableInfo()
-			logging.LogMessage(progress, "migrating %q table", table.Name())
+			if _, err := logging.LogMessage(progress, "migrating %q table", table.Name()); err != nil {
+				return fmt.Errorf("failed to log message: %w", err)
+			}
 			db, err := sql.queryTable(ctx, false, info.Name)
 			if err != nil {
-				return errSQLUnableToMigrate.WithMessageF(table.Name, "unable to access table")
+				return fmt.Errorf("failed to access table %q for migration: %w", table.Name(), err)
 			}
 
 			tp := reflect.New(info.Model).Interface()
 
 			if err := db.AutoMigrate(tp); err != nil {
-				return errSQLUnableToMigrate.WithMessageF(table.Name, err)
+				return fmt.Errorf("failed auto migration for table %q: %w", table.Name(), err)
 			}
 		}
 		return nil
-	}, progress, "migrating database tables")
+	}, progress, "migrating database tables"); err != nil {
+		return fmt.Errorf("failed to migrate database tables: %w", err)
+	}
+	return nil
 }

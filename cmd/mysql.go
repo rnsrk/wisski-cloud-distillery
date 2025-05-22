@@ -1,5 +1,6 @@
 package cmd
 
+//spellchecker:words github wisski distillery internal goprogram exit parser
 import (
 	"fmt"
 
@@ -9,12 +10,12 @@ import (
 	"github.com/tkw1536/goprogram/parser"
 )
 
-// Mysql is the 'mysql' command
+// Mysql is the 'mysql' command.
 var Mysql wisski_distillery.Command = mysql{}
 
 type mysql struct {
 	Positionals struct {
-		Args []string `positional-arg-name:"ARGS" description:"arguments to pass to the mysql command"`
+		Args []string `description:"arguments to pass to the mysql command" positional-arg-name:"ARGS"`
 	} `positional-args:"true"`
 }
 
@@ -33,11 +34,9 @@ func (mysql) Description() wisski_distillery.Description {
 
 func (ms mysql) Run(context wisski_distillery.Context) error {
 	code := context.Environment.SQL().Shell(context.Context, context.IOStream, ms.Positionals.Args...)
-	if code != 0 {
-		return exit.Error{
-			ExitCode: exit.ExitCode(uint8(code)),
-			Message:  fmt.Sprintf("Exit code %d", code),
-		}
+
+	if code := exit.Code(code); code != 0 {
+		return exit.NewErrorWithCode(fmt.Sprintf("exit code %d", code), code)
 	}
 	return nil
 }

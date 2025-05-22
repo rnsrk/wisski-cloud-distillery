@@ -1,7 +1,10 @@
+//spellchecker:words purger
 package purger
 
+//spellchecker:words context github wisski distillery internal component instances models logging goprogram exit
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -10,10 +13,9 @@ import (
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/instances"
 	"github.com/FAU-CDI/wisski-distillery/internal/models"
 	"github.com/FAU-CDI/wisski-distillery/pkg/logging"
-	"github.com/tkw1536/goprogram/exit"
 )
 
-// Purger purges instances from the distillery
+// Purger purges instances from the distillery.
 type Purger struct {
 	component.Base
 	dependencies struct {
@@ -22,66 +24,69 @@ type Purger struct {
 	}
 }
 
-var errPurgeNoDetails = exit.Error{
-	Message:  "unable to find instance details for purge: %s",
-	ExitCode: exit.ExitGeneric,
-}
-var errPurgeGeneric = exit.Error{
-	Message:  "unable to purge instance %q: %s",
-	ExitCode: exit.ExitGeneric,
-}
-
 // Purge permanently purges an instance from the distillery.
 // The instance does not have to exist; in which case the resources are also deleted.
 func (purger *Purger) Purge(ctx context.Context, out io.Writer, slug string) error {
-	logging.LogMessage(out, "Checking bookkeeping table")
+	if _, err := logging.LogMessage(out, "Checking bookkeeping table"); err != nil {
+		return fmt.Errorf("failed to log message: %w", err)
+	}
 	instance, err := purger.dependencies.Instances.WissKI(ctx, slug)
-	if err == instances.ErrWissKINotFound {
-		fmt.Fprintln(out, "Not found in bookkeeping table, assuming defaults")
+	if errors.Is(err, instances.ErrWissKINotFound) {
+		_, _ = fmt.Fprintln(out, "Not found in bookkeeping table, assuming defaults")
 		instance, err = purger.dependencies.Instances.Create(slug, models.System{})
 	}
 	if err != nil {
-		return errPurgeNoDetails.WithMessageF(err)
+		return fmt.Errorf("unable to find instance details for purge: %w", err)
 	}
 
 	// remove docker stack
-	logging.LogMessage(out, "Stopping and removing docker container")
+	if _, err := logging.LogMessage(out, "Stopping and removing docker container"); err != nil {
+		return fmt.Errorf("failed to log message: %w", err)
+	}
 	if err := instance.Barrel().Stack().Down(ctx, out); err != nil {
-		fmt.Fprintln(out, err)
+		_, _ = fmt.Fprintln(out, err)
 	}
 
 	// remove the filesystem
-	logging.LogMessage(out, "Removing from filesystem %s", instance.FilesystemBase)
+	if _, err := logging.LogMessage(out, "Removing from filesystem %s", instance.FilesystemBase); err != nil {
+		return fmt.Errorf("failed to log message: %w", err)
+	}
 	if err := os.RemoveAll(instance.FilesystemBase); err != nil {
-		fmt.Fprintln(out, err)
+		_, _ = fmt.Fprintln(out, err) // already handling error
 	}
 
 	// purge all the instance specific resources
 	if err := logging.LogOperation(func() error {
 		domain := instance.Domain()
 		for _, pc := range purger.dependencies.Provisionable {
-			logging.LogMessage(out, "Purging %s resources", pc.Name())
+			if _, err := logging.LogMessage(out, "Purging %s resources", pc.Name()); err != nil {
+				return fmt.Errorf("failed to log message: %w", err)
+			}
 			err := pc.Purge(ctx, instance.Instance, domain)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to purge %s for instance %q: %w", pc.Name(), instance.Slug, err)
 			}
 		}
 
 		return nil
 	}, out, "Purging instance-specific resources"); err != nil {
-		return errPurgeGeneric.WithMessageF(slug, err)
+		return fmt.Errorf("unable to purge instance %q: %w", slug, err)
 	}
 
 	// remove from bookkeeping
-	logging.LogMessage(out, "Removing instance from bookkeeping")
+	if _, err := logging.LogMessage(out, "Removing instance from bookkeeping"); err != nil {
+		return fmt.Errorf("failed to log message: %w", err)
+	}
 	if err := instance.Bookkeeping().Delete(ctx); err != nil {
-		fmt.Fprintln(out, err)
+		_, _ = fmt.Fprintln(out, err)
 	}
 
 	// remove the filesystem
-	logging.LogMessage(out, "Remove lock data")
+	if _, err := logging.LogMessage(out, "Remove lock data"); err != nil {
+		return fmt.Errorf("failed to log message: %w", err)
+	}
 	if instance.Locker().TryUnlock(ctx) {
-		fmt.Fprintln(out, "instance was not locked")
+		_, _ = fmt.Fprintln(out, "instance was not locked")
 	}
 
 	return nil

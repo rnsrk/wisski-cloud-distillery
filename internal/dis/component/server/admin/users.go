@@ -1,15 +1,18 @@
+//spellchecker:words admin
 package admin
 
+//spellchecker:words context errors http github wisski distillery internal component auth server assets templating wdlog pkglib httpx form field embed
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/auth"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/server/assets"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/server/templating"
-	"github.com/rs/zerolog"
+	"github.com/FAU-CDI/wisski-distillery/internal/wdlog"
 	"github.com/tkw1536/pkglib/httpx"
 	"github.com/tkw1536/pkglib/httpx/form"
 	"github.com/tkw1536/pkglib/httpx/form/field"
@@ -106,7 +109,7 @@ func (admin *Admin) createUser(context.Context) http.Handler {
 			// check the password policy
 			err = admin.dependencies.Auth.CheckPasswordPolicy(cu.Passsword, cu.User)
 			if err != nil {
-				return cu, err
+				return cu, fmt.Errorf("failed to check passsword policy: %w", err)
 			}
 
 			return cu, nil
@@ -116,19 +119,19 @@ func (admin *Admin) createUser(context.Context) http.Handler {
 			// create the user
 			user, err := admin.dependencies.Auth.CreateUser(r.Context(), cu.User)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to create user: %w", err)
 			}
 
 			// disable the user and setup the admin flag
 			user.SetAdmin(cu.Admin)
 			if err := user.Save(r.Context()); err != nil {
-				return err
+				return fmt.Errorf("failed to save user: %w", err)
 			}
 
 			// set the password!
 			err = user.SetPassword(r.Context(), []byte(cu.Passsword))
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to set password: %w", err)
 			}
 
 			// everything went fine, redirect the user back to the user page!
@@ -144,10 +147,14 @@ var errNotCurrentUser = httpx.Response{
 }
 
 func (admin *Admin) useraction(ctx context.Context, name string, action func(r *http.Request, user *auth.AuthUser) error) http.Handler {
-	logger := zerolog.Ctx(ctx)
+	logger := wdlog.Of(ctx)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
-			logger.Err(err).Str("action", name).Msg("failed to parse form")
+			logger.Error(
+				"failed to parse form",
+				"error", err,
+				"action", name,
+			)
 			httpx.HTMLInterceptor.Fallback.ServeHTTP(w, r)
 			return
 		}
@@ -155,14 +162,22 @@ func (admin *Admin) useraction(ctx context.Context, name string, action func(r *
 		username := r.PostFormValue("user")
 		user, err := admin.dependencies.Auth.User(r.Context(), username)
 		if err != nil {
-			logger.Err(err).Str("action", name).Msg("failed to get user")
+			logger.Error(
+				"failed to get user",
+				"error", err,
+				"action", name,
+			)
 			httpx.HTMLInterceptor.Fallback.ServeHTTP(w, r)
 			return
 		}
 
 		me, err := admin.dependencies.Auth.UserOfSession(r)
 		if err != nil {
-			logger.Err(err).Str("action", name).Msg("failed to get current user")
+			logger.Error(
+				"failed to get current user",
+				"error", err,
+				"action", name,
+			)
 			httpx.HTMLInterceptor.Fallback.ServeHTTP(w, r)
 			return
 		}
@@ -174,7 +189,11 @@ func (admin *Admin) useraction(ctx context.Context, name string, action func(r *
 		}
 
 		if err := action(r, user); err != nil {
-			logger.Err(err).Str("action", name).Msg("failed to act on user")
+			logger.Error(
+				"failed to act on user",
+				"error", err,
+				"action", name,
+			)
 			http.Redirect(w, r, "/admin/users/?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 			return
 		}
@@ -219,7 +238,7 @@ func (admin *Admin) usersPasswordHandler(ctx context.Context) http.Handler {
 		// check the password policy
 		err := user.CheckPasswordPolicy(password)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to check password policy: %w", err)
 		}
 		return user.SetPassword(r.Context(), []byte(password))
 	})
@@ -233,11 +252,15 @@ func (admin *Admin) usersUnsetPasswordHandler(ctx context.Context) http.Handler 
 }
 
 func (admin *Admin) usersImpersonateHandler(ctx context.Context) http.Handler {
-	logger := zerolog.Ctx(ctx)
+	logger := wdlog.Of(ctx)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if err := r.ParseForm(); err != nil {
-			logger.Err(err).Str("action", "impersonate").Msg("failed to parse form")
+			logger.Error(
+				"failed to parse form",
+				"error", err,
+				"action", "impersonate",
+			)
 			httpx.HTMLInterceptor.Fallback.ServeHTTP(w, r)
 			return
 		}
@@ -245,14 +268,23 @@ func (admin *Admin) usersImpersonateHandler(ctx context.Context) http.Handler {
 		username := r.PostFormValue("user")
 		user, err := admin.dependencies.Auth.User(r.Context(), username)
 		if err != nil {
-			logger.Err(err).Str("action", "impersonate").Msg("failed to get user")
+			logger.Error(
+				"failed to get user",
+				"error", err,
+				"action", "impersonate",
+			)
+
 			httpx.HTMLInterceptor.Fallback.ServeHTTP(w, r)
 			return
 		}
 
 		// login the user into the session of the provided user
 		if err := admin.dependencies.Auth.Login(w, r, user); err != nil {
-			logger.Err(err).Str("action", "impersonate").Msg("failed to login user")
+			logger.Error(
+				"failed to login user",
+				"error", err,
+				"action", "impersonate",
+			)
 			httpx.HTMLInterceptor.Fallback.ServeHTTP(w, r)
 			return
 		}

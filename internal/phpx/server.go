@@ -1,11 +1,14 @@
+//spellchecker:words phpx
 package phpx
 
+//spellchecker:words bytes compress flate context encoding base json regexp slices strings sync embed github pkglib lazy status stream
 import (
 	"bytes"
 	"compress/flate"
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"regexp"
@@ -15,6 +18,7 @@ import (
 
 	_ "embed"
 
+	"github.com/tkw1536/pkglib/errorsx"
 	"github.com/tkw1536/pkglib/lazy"
 	"github.com/tkw1536/pkglib/status"
 	"github.com/tkw1536/pkglib/stream"
@@ -24,6 +28,8 @@ import (
 // A typical use-case is to define functions using [MarshalEval], and then call those functions [MarshalCall].
 //
 // A server, once used, should be closed using the [Close] method.
+//
+//nolint:containedctx
 type Server struct {
 	// Context to use for the server
 	Context context.Context
@@ -80,9 +86,11 @@ func (server *Server) prepare() error {
 		// start the shell process, which will close everything once done
 		go func() {
 			defer func() {
-				ir.Close()
-				iw.Close()
-				lb.Close()
+				// TODO: is there a reasonable way to report this error?
+				// via the logger perhaps?
+				_ = ir.Close()
+				_ = iw.Close()
+				_ = lb.Close()
 
 				server.cancel()
 			}()
@@ -90,11 +98,11 @@ func (server *Server) prepare() error {
 			// start the actual server
 			io := stream.NewIOStream(&lb, nil, ir)
 			err := server.Executor.Spawn(server.c, io, serverPHP)
-			server.err.Set(ServerError{errClosed, err})
+			server.err.Set(ServerError{Message: errClosed, Err: err})
 		}()
 	})
 
-	return server.err.Get(nil)
+	return server.err.Get(nil) //nolint:wrapcheck
 }
 
 // MarshalEval evaluates code on the server and Marshals the result into value.
@@ -145,7 +153,7 @@ func (server *Server) MarshalEval(ctx context.Context, value any, code string) e
 	// check if there was an error
 	var errString string
 	if err := json.Unmarshal(received[1], &errString); err == nil && errString != "" {
-		return Throwable(errString)
+		return ThrowableError(errString)
 	}
 
 	// special case: no return value => no unmarshaling needed
@@ -154,63 +162,60 @@ func (server *Server) MarshalEval(ctx context.Context, value any, code string) e
 	}
 
 	// read the actual result!
-	return json.Unmarshal(received[0], value)
+	err := json.Unmarshal(received[0], value)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal result: %w", err)
+	}
+	return nil
 }
 
-// Decode decodes a message received from the server.
-// The message is assumed to be encoded by server.php.
-//
-// This function does the following:
-// - decode base64 (opposite of php's "base64_encode")
-// - inflate (opposite of php's "gzdeflate")
-// - decode json (opposite of php's "json_encode")
-func (*Server) decode(dest *[2]json.RawMessage, message []byte) error {
+// - decode json (opposite of php's "json_encode").
+func (*Server) decode(dest *[2]json.RawMessage, message []byte) (e error) {
 	// decode base64
 	raw := base64.NewDecoder(base64.StdEncoding, bytes.NewReader(message))
 
 	// unpack gzip
 	unpacker := flate.NewReader(raw)
-	defer unpacker.Close()
+	defer errorsx.Close(unpacker, &e, "unpacker")
 
 	// and read the value
 	decoder := json.NewDecoder(unpacker)
-	return decoder.Decode(dest)
+	if err := decoder.Decode(dest); err != nil {
+		return fmt.Errorf("failed to unmarshal: %w", err)
+	}
+	return nil
 }
 
-// Encode encodes and writes a message for the server into dest.
-// The message is assumed to be received by server.php.
-//
-// This function does the following:
-// - inflate (opposite of php's "gzdeflate")
-// - encode base64 (opposite of php's "base64_decode")
-func (*Server) encode(dest io.WriteCloser, code string) (err error) {
-
+// - encode base64 (opposite of php's "base64_decode").
+func (*Server) encode(dest io.WriteCloser, code string) (e error) {
 	// write a final newline at the end!
 	defer func() {
-		if err != nil {
+		if e != nil {
 			return
 		}
-		_, err = dest.Write([]byte("\n"))
+		_, e = dest.Write([]byte("\n"))
 	}()
 
 	// base64 encode all the things!
 	encoder := base64.NewEncoder(base64.StdEncoding, dest)
-	defer encoder.Close()
+	defer errorsx.Close(encoder, &e, "encoder")
 
 	// compress all the things!
 	compressor, err := flate.NewWriter(encoder, 9)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create compressor: %w", err)
 	}
-	defer compressor.Close()
+	defer errorsx.Close(compressor, &e, "compressor")
 
 	// do the write!
-	_, err = compressor.Write([]byte(code))
-
-	return
+	_, e = compressor.Write([]byte(code))
+	if e != nil {
+		e = fmt.Errorf("failed to write to compressor: %w", e)
+	}
+	return e
 }
 
-// Eval is like [MarshalEval], but returns the value as an any
+// Eval is like [MarshalEval], but returns the value as an any.
 func (server *Server) Eval(ctx context.Context, code string) (value any, err error) {
 	err = server.MarshalEval(ctx, &value, code)
 	return
@@ -247,7 +252,7 @@ func (server *Server) MarshalCall(ctx context.Context, value any, function strin
 	return server.MarshalEval(ctx, value, code)
 }
 
-// Call is like [MarshalCall] but returns the return value of the function as an any
+// Call is like [MarshalCall] but returns the return value of the function as an any.
 func (server *Server) Call(ctx context.Context, function string, args ...any) (value any, err error) {
 	err = server.MarshalCall(ctx, &value, function, args...)
 	return
@@ -255,7 +260,9 @@ func (server *Server) Call(ctx context.Context, function string, args ...any) (v
 
 // Close closes this server and prevents any further code from being run.
 func (server *Server) Close() error {
-	server.prepare()
+	if err := server.prepare(); err != nil {
+		return fmt.Errorf("failed to prepeare server: %w", err)
+	}
 
 	server.m.Lock()
 	defer server.m.Unlock()
@@ -265,16 +272,19 @@ func (server *Server) Close() error {
 		return ServerError{Message: errClosed}
 	}
 
-	server.in.Close()
+	err := server.in.Close()
 	<-server.c.Done()
 
+	if err != nil {
+		return fmt.Errorf("suspicous close of server input: %w", err)
+	}
 	return nil
 }
 
 //go:embed server.php
 var serverPHP string
 
-// pre-process the server.php code to make it shorter
+// pre-process the server.php code to make it shorter.
 func init() {
 	minifier := regexp.MustCompile(`\s*([=)(.,{}])\s*`)
 

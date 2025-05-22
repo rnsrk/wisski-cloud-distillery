@@ -1,5 +1,6 @@
 package ssh2
 
+//spellchecker:words bufio strconv strings github wisski distillery internal component gliderlabs
 import (
 	"bufio"
 	"io"
@@ -55,7 +56,7 @@ func (ssh2 *SSH2) handleConnection(session ssh.Session) {
 		banner = strings.ReplaceAll(banner, oldnew[0], oldnew[1])
 	}
 
-	io.WriteString(session, banner)
+	_, _ = io.WriteString(session, banner) // no way to deal with this message
 
 	// wait until the user closes
 	buffer := bufio.NewReader(session)

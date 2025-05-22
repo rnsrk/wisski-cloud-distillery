@@ -1,5 +1,7 @@
+//spellchecker:words ingredient
 package ingredient
 
+//spellchecker:words context github wisski distillery internal phpx status
 import (
 	"context"
 
@@ -15,7 +17,9 @@ type WissKIFetcher interface {
 	Fetch(flags FetcherFlags, target *status.WissKI) error
 }
 
-// FetcherFlags describes options for a WissKIFetcher
+// FetcherFlags describes options for a WissKIFetcher.
+//
+//nolint:containedctx // TODO: Pass context explicitly
 type FetcherFlags struct {
 	Context context.Context
 	Quick   bool

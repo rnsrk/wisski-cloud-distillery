@@ -1,5 +1,7 @@
+//spellchecker:words actions
 package actions
 
+//spellchecker:words context github wisski distillery internal component auth scopes
 import (
 	"context"
 	"io"
@@ -9,7 +11,7 @@ import (
 	"github.com/FAU-CDI/wisski-distillery/internal/wisski"
 )
 
-// Routeable is a component that is servable
+// WebsocketAction is a component that can be run via the websocket api.
 type WebsocketAction interface {
 	component.Component
 
@@ -17,6 +19,7 @@ type WebsocketAction interface {
 	Act(ctx context.Context, in io.Reader, out io.Writer, params ...string) (any, error)
 }
 
+// WebsocketInstanceAction is like [WebsocketAction] but is specific to a WissKI instance.
 type WebsocketInstanceAction interface {
 	component.Component
 
@@ -24,7 +27,7 @@ type WebsocketInstanceAction interface {
 	Act(ctx context.Context, instance *wisski.WissKI, in io.Reader, out io.Writer, params ...string) (any, error)
 }
 
-// Action represents information about an action
+// Action represents information about an action.
 type Action struct {
 	Name string
 

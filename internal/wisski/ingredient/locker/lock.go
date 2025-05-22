@@ -1,16 +1,18 @@
+//spellchecker:words locker
 package locker
 
+//spellchecker:words context time github wisski distillery internal models ingredient goprogram exit pkglib contextx
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/FAU-CDI/wisski-distillery/internal/models"
 	"github.com/FAU-CDI/wisski-distillery/internal/wisski/ingredient"
-	"github.com/tkw1536/goprogram/exit"
 	"github.com/tkw1536/pkglib/contextx"
 )
 
-// Locker provides facitilites for locking this WissKI instance
+// Locker provides facitilites for locking this WissKI instance.
 type Locker struct {
 	ingredient.Base
 }
@@ -19,12 +21,9 @@ var (
 	_ ingredient.WissKIFetcher = (*Locker)(nil)
 )
 
-var Locked = exit.Error{
-	Message:  "instance is locked for administrative operations",
-	ExitCode: exit.ExitGeneric,
-}
+var ErrLocked = errors.New("instance is locked for administrative operations")
 
-// TryLock attemps to lock this WissKI and returns if it suceeded
+// TryLock attemps to lock this WissKI and returns if it suceeded.
 func (lock *Locker) TryLock(ctx context.Context) bool {
 	liquid := ingredient.GetLiquid(lock)
 
@@ -42,8 +41,8 @@ func (lock *Locker) TryLock(ctx context.Context) bool {
 func (lock *Locker) TryUnlock(ctx context.Context) bool {
 	liquid := ingredient.GetLiquid(lock)
 
-	ctx, close := contextx.Anyways(ctx, time.Second)
-	defer close()
+	ctx, cancel := contextx.Anyways(ctx, time.Second)
+	defer cancel()
 
 	table, err := liquid.SQL.QueryTable(ctx, liquid.LockTable)
 	if err != nil {

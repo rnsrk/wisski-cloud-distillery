@@ -1,7 +1,10 @@
+//spellchecker:words resolver
 package resolver
 
+//spellchecker:words context
 import (
 	"context"
+	"fmt"
 )
 
 func (resolver *Resolver) TaskName() string {
@@ -11,19 +14,18 @@ func (resolver *Resolver) TaskName() string {
 func (resolver *Resolver) Cron(ctx context.Context) error {
 	prefixes, err := resolver.AllPrefixes(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed resolve all prefixes: %w", err)
 	}
 
 	resolver.prefixes.Set(prefixes)
 	return nil
 }
 
-// AllPrefixes returns a list of all prefixes from the server.
-// Prefixes may be cached on the server
+// Prefixes may be cached on the server.
 func (resolver *Resolver) AllPrefixes(ctx context.Context) (map[string]string, error) {
 	instances, err := resolver.dependencies.Instances.All(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get all prefixes: %w", err)
 	}
 
 	gPrefixes := make(map[string]string)

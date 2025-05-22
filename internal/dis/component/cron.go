@@ -1,10 +1,12 @@
+//spellchecker:words component
 package component
 
+//spellchecker:words context
 import (
 	"context"
 )
 
-// Cronable is a component that implements a cron method
+// Cronable is a component that implements a cron method.
 type Cronable interface {
 	Component
 

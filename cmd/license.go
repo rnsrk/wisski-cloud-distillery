@@ -1,5 +1,6 @@
 package cmd
 
+//spellchecker:words github wisski distillery internal component server assets
 import (
 	wisski_distillery "github.com/FAU-CDI/wisski-distillery"
 	"github.com/FAU-CDI/wisski-distillery/internal/cli"
@@ -28,7 +29,7 @@ func (license) AfterParse() error {
 }
 
 func (license) Run(context wisski_distillery.Context) error {
-	context.Printf(stringLicenseInfo, wisski_distillery.License, cli.LegalNotices, assets.Disclaimer)
+	_, _ = context.Printf(stringLicenseInfo, wisski_distillery.License, cli.LegalNotices, assets.Disclaimer)
 	return nil
 }
 

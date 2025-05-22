@@ -1,5 +1,6 @@
 package cmd
 
+//spellchecker:words github wisski distillery internal goprogram exit pkglib status
 import (
 	"fmt"
 	"io"
@@ -12,11 +13,11 @@ import (
 	"github.com/tkw1536/pkglib/status"
 )
 
-// Cron is the 'cron' command
+// Cron is the 'cron' command.
 var UpdatePrefixConfig wisski_distillery.Command = updateprefixconfig{}
 
 type updateprefixconfig struct {
-	Parallel int `short:"p" long:"parallel" description:"run on (at most) this many instances in parallel. 0 for no limit." default:"1"`
+	Parallel int `default:"1" description:"run on (at most) this many instances in parallel. 0 for no limit." long:"parallel" short:"p"`
 }
 
 func (updateprefixconfig) Description() wisski_distillery.Description {
@@ -29,29 +30,25 @@ func (updateprefixconfig) Description() wisski_distillery.Description {
 	}
 }
 
-var errPrefixUpdateFailed = exit.Error{
-	Message:  "failed to update the prefix configuration",
-	ExitCode: exit.ExitGeneric,
-}
+var errPrefixUpdateFailed = exit.NewErrorWithCode("failed to update prefix configuration", exit.ExitGeneric)
 
 func (upc updateprefixconfig) Run(context wisski_distillery.Context) (err error) {
-	defer errPrefixUpdateFailed.DeferWrap(&err)
-
 	dis := context.Environment
 
 	wissKIs, err := dis.Instances().All(context.Context)
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: failed to get all instances: %w", errPrefixUpdateFailed, err)
 	}
 
-	return status.WriterGroup(context.Stderr, upc.Parallel, func(instance *wisski.WissKI, writer io.Writer) error {
-		io.WriteString(writer, "reading prefixes")
-		err := instance.Prefixes().Update(context.Context)
-		if err != nil {
-			return err
+	if err := status.WriterGroup(context.Stderr, upc.Parallel, func(instance *wisski.WissKI, writer io.Writer) error {
+		if _, err := io.WriteString(writer, "reading prefixes"); err != nil {
+			return fmt.Errorf("failed to log progress: %w", err)
 		}
-		return nil
+		return instance.Prefixes().Update(context.Context)
 	}, wissKIs, status.SmartMessage(func(item *wisski.WissKI) string {
 		return fmt.Sprintf("update_prefix %q", item.Slug)
-	}))
+	})); err != nil {
+		return fmt.Errorf("%w: failed to update prefixes: %w", errPrefixUpdateFailed, err)
+	}
+	return nil
 }

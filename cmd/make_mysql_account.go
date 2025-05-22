@@ -1,13 +1,16 @@
 package cmd
 
+//spellchecker:words github wisski distillery internal goprogram exit parser
 import (
+	"fmt"
+
 	wisski_distillery "github.com/FAU-CDI/wisski-distillery"
 	"github.com/FAU-CDI/wisski-distillery/internal/cli"
 	"github.com/tkw1536/goprogram/exit"
 	"github.com/tkw1536/goprogram/parser"
 )
 
-// Shell is the 'shell' command
+// Shell is the 'shell' command.
 var MakeMysqlAccount wisski_distillery.Command = makeMysqlAccount{}
 
 type makeMysqlAccount struct{}
@@ -25,38 +28,29 @@ func (makeMysqlAccount) Description() wisski_distillery.Description {
 	}
 }
 
-var errUnableToReadUsername = exit.Error{
-	ExitCode: exit.ExitGeneric,
-	Message:  "unable to read username",
-}
-
-var errUnableToReadPassword = exit.Error{
-	ExitCode: exit.ExitGeneric,
-	Message:  "unable to read password",
-}
-
-var errUnableToMakeAccount = exit.Error{
-	ExitCode: exit.ExitGeneric,
-	Message:  "unable to create account",
-}
+var (
+	errUnableToReadUsername = exit.NewErrorWithCode("unable to read username", exit.ExitGeneric)
+	errUnableToReadPassword = exit.NewErrorWithCode("unable to read password", exit.ExitGeneric)
+	errUnableToMakeAccount  = exit.NewErrorWithCode("unable to create account", exit.ExitGeneric)
+)
 
 func (mma makeMysqlAccount) Run(context wisski_distillery.Context) error {
 	dis := context.Environment
 
-	context.Printf("Username>")
+	_, _ = context.Printf("Username>")
 	username, err := context.ReadLine()
 	if err != nil {
-		return errUnableToReadUsername.WrapError(err)
+		return fmt.Errorf("%w: %w", errUnableToReadUsername, err)
 	}
 
-	context.Printf("Password>")
+	_, _ = context.Printf("Password>")
 	password, err := context.ReadPassword()
 	if err != nil {
-		return errUnableToReadPassword.WrapError(err)
+		return fmt.Errorf("%w: %w", errUnableToReadPassword, err)
 	}
 
 	if err := dis.SQL().CreateSuperuser(context.Context, username, password, false); err != nil {
-		return errUnableToMakeAccount.WrapError(err)
+		return fmt.Errorf("%w: %w", errUnableToMakeAccount, err)
 	}
 
 	return nil

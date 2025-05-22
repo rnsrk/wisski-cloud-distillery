@@ -1,12 +1,16 @@
+//spellchecker:words unpack
 package unpack
 
+//spellchecker:words path filepath github errors pkglib umaskfree
 import (
+	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 
-	"github.com/pkg/errors"
+	"github.com/tkw1536/pkglib/errorsx"
 	"github.com/tkw1536/pkglib/fsx/umaskfree"
 )
 
@@ -22,13 +26,13 @@ func InstallDir(dst string, src string, fsys fs.FS, onInstallFile func(dst, src 
 	// open the source file
 	srcFile, err := fsys.Open(src)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to install directory: %w", err)
 	}
 
 	// stat it!
 	srcInfo, err := srcFile.Stat()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to stat source file: %w", err)
 	}
 
 	// make sure it's a file!
@@ -50,18 +54,18 @@ func InstallDir(dst string, src string, fsys fs.FS, onInstallFile func(dst, src 
 //
 // OnInstallFile is called for each source and destination file.
 // OnInstallFile may be nil.
-func installResource(dst string, src string, fsys fs.FS, onInstallFile func(dst, src string)) error {
+func installResource(dst string, src string, fsys fs.FS, onInstallFile func(dst, src string)) (e error) {
 	// open the srcFile
 	srcFile, err := fsys.Open(src)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to open file to install: %w", err)
 	}
-	defer srcFile.Close()
+	defer errorsx.Close(srcFile, &e, "file to install")
 
 	// stat it!
 	srcInfo, err := srcFile.Stat()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to stat file: %w", err)
 	}
 
 	// call the hook (if any)
@@ -84,12 +88,12 @@ func installDir(dst string, srcInfo fs.FileInfo, srcFile fs.ReadDirFile, src str
 	switch {
 	case errors.Is(dstErr, fs.ErrNotExist):
 		if err := umaskfree.MkdirAll(dst, srcInfo.Mode()); err != nil {
-			return errors.Wrapf(err, "Error creating destination directory %s", dst)
+			return fmt.Errorf("unable to create destination directory %q: %w", dst, err)
 		}
 	case dstErr != nil:
-		return errors.Wrapf(dstErr, "Error calling stat on destination %s", dst)
+		return fmt.Errorf("unable to call stat on destination %q: %w", dst, dstErr)
 	case !dstStat.IsDir():
-		return errors.Wrapf(errExpectedDirectoryButGotFile, "Error opening destination %s", dst)
+		return fmt.Errorf("unable to open destination %q: %w", dst, errExpectedDirectoryButGotFile)
 	}
 
 	// NOTE(twiesing): We don't use fs.Walk here.
@@ -99,7 +103,7 @@ func installDir(dst string, srcInfo fs.FileInfo, srcFile fs.ReadDirFile, src str
 	// read the directory
 	entries, err := srcFile.ReadDir(-1)
 	if err != nil {
-		return errors.Wrapf(err, "Error reading source directory %s", srcFile)
+		return fmt.Errorf("unable to read source directory %q: %w", srcFile, err)
 	}
 
 	// iterate over all the children
@@ -117,15 +121,18 @@ func installDir(dst string, srcInfo fs.FileInfo, srcFile fs.ReadDirFile, src str
 	return nil
 }
 
-func installFile(dst string, srcInfo fs.FileInfo, src fs.File) error {
+func installFile(dst string, srcInfo fs.FileInfo, src fs.File) (e error) {
 	// create the file using the right mode!
 	file, err := umaskfree.Create(dst, srcInfo.Mode())
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create file: %w", err)
 	}
-	defer file.Close()
+	defer errorsx.Close(file, &e, "file")
 
 	// copy over the content!
 	_, err = io.Copy(file, src)
-	return errors.Wrapf(err, "Error writing to destination %s", dst)
+	if err != nil {
+		return fmt.Errorf("error writing to destination: %w", err)
+	}
+	return nil
 }

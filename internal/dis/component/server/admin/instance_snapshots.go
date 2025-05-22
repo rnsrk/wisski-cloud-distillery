@@ -1,10 +1,14 @@
+//spellchecker:words admin
 package admin
 
+//spellchecker:words context embed html template http github wisski distillery internal component server assets templating models pkglib httpx julienschmidt httprouter
 import (
 	"context"
 	_ "embed"
+	"fmt"
 	"html/template"
 	"net/http"
+	"net/url"
 
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/server/assets"
@@ -53,14 +57,15 @@ func (admin *Admin) instanceSnapshots(context.Context) http.Handler {
 
 		ctx.Snapshots, err = ctx.Instance.Snapshots(r.Context())
 		if err != nil {
-			return ctx, nil, err
+			return ctx, nil, fmt.Errorf("failed to get snapshots: %w", err)
 		}
 
+		escapedSlug := url.PathEscape(ctx.Instance.Slug)
 		return ctx, []templating.FlagFunc{
-			templating.ReplaceCrumb(menuInstance, component.MenuItem{Title: "Instance", Path: template.URL("/admin/instance/" + ctx.Instance.Slug)}),
-			templating.ReplaceCrumb(menuSnapshots, component.MenuItem{Title: "Snapshots", Path: template.URL("/admin/instance/" + ctx.Instance.Slug + "/snapshots")}),
+			templating.ReplaceCrumb(menuInstance, component.MenuItem{Title: "Instance", Path: template.URL("/admin/instance/" + escapedSlug)}),                  // #nosec G203 -- escaped and safe
+			templating.ReplaceCrumb(menuSnapshots, component.MenuItem{Title: "Snapshots", Path: template.URL("/admin/instance/" + escapedSlug + "/snapshots")}), // #nosec G203 -- escaped and safe
 			templating.Title(ctx.Instance.Slug + " - Snapshots"),
-			admin.instanceTabs(slug, "snapshots"),
+			admin.instanceTabs(escapedSlug, "snapshots"),
 		}, nil
 	})
 }

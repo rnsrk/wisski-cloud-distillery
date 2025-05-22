@@ -1,25 +1,28 @@
 package cmd
 
+//spellchecker:words github wisski distillery internal component exporter goprogram exit
 import (
+	"fmt"
+
 	wisski_distillery "github.com/FAU-CDI/wisski-distillery"
 	"github.com/FAU-CDI/wisski-distillery/internal/cli"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/exporter"
 	"github.com/tkw1536/goprogram/exit"
 )
 
-// Snapshot creates a snapshot of an instance
+// Snapshot creates a snapshot of an instance.
 var Snapshot wisski_distillery.Command = snapshot{}
 
 type snapshot struct {
-	Keepalive   bool `short:"k" long:"keepalive" description:"keep instance running while taking a backup. might lead to inconsistent state"`
-	StagingOnly bool `short:"s" long:"staging-only" description:"do not package into a snapshot archive, but only create a staging directory"`
+	Keepalive   bool `description:"keep instance running while taking a backup. might lead to inconsistent state" long:"keepalive"    short:"k"`
+	StagingOnly bool `description:"do not package into a snapshot archive, but only create a staging directory"   long:"staging-only" short:"s"`
 
-	Parts []string `short:"p" long:"parts" description:"parts to include in snapshots. defaults to all parts, use l to list all available parts"`
-	List  bool     `short:"l" long:"list-parts" description:"list available parts"`
+	Parts []string `description:"parts to include in snapshots. defaults to all parts, use l to list all available parts" long:"parts"      short:"p"`
+	List  bool     `description:"list available parts"                                                                    long:"list-parts" short:"l"`
 
 	Positionals struct {
-		Slug string `positional-arg-name:"SLUG" required:"1-1" description:"slug of instance to take a snapshot of"`
-		Dest string "positional-arg-name:\"DEST\" description:\"destination path to write snapshot archive to. defaults to the `snapshots/archives/` directory\""
+		Slug string `description:"slug of instance to take a snapshot of"                                                         positional-arg-name:"SLUG" required:"1-1"`
+		Dest string `description:"destination path to write snapshot archive to. defaults to the 'snapshots/archives/' directory" positional-arg-name:"DEST"`
 	} `positional-args:"true"`
 }
 
@@ -33,15 +36,10 @@ func (snapshot) Description() wisski_distillery.Description {
 	}
 }
 
-var errSnapshotFailed = exit.Error{
-	Message:  "failed to make a snapshot",
-	ExitCode: exit.ExitGeneric,
-}
-
-var errSnapshotWissKI = exit.Error{
-	Message:  "unable to find WissKI",
-	ExitCode: exit.ExitGeneric,
-}
+var (
+	errSnapshotFailed = exit.NewErrorWithCode("failed to make a snapshot", exit.ExitGeneric)
+	errSnapshotWissKI = exit.NewErrorWithCode("unable to find WissKI", exit.ExitGeneric)
+)
 
 func (sn snapshot) Run(context wisski_distillery.Context) error {
 	dis := context.Environment
@@ -49,7 +47,7 @@ func (sn snapshot) Run(context wisski_distillery.Context) error {
 	// list available parts
 	if sn.List {
 		for _, part := range dis.Exporter().Parts() {
-			context.Println(part)
+			_, _ = context.Println(part)
 		}
 		return nil
 	}
@@ -57,7 +55,7 @@ func (sn snapshot) Run(context wisski_distillery.Context) error {
 	// find the instance!
 	instance, err := dis.Instances().WissKI(context.Context, sn.Positionals.Slug)
 	if err != nil {
-		return errSnapshotWissKI.WrapError(err)
+		return fmt.Errorf("%w: %w", errSnapshotWissKI, err)
 	}
 
 	// do a snapshot of it!
@@ -72,7 +70,7 @@ func (sn snapshot) Run(context wisski_distillery.Context) error {
 	})
 
 	if err != nil {
-		return errSnapshotFailed.WrapError(err)
+		return fmt.Errorf("%w: %w", errSnapshotFailed, err)
 	}
 	return nil
 }

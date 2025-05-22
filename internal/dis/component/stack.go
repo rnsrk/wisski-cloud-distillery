@@ -1,8 +1,12 @@
 // Package stack implements a docker compose stack
+//
+//spellchecker:words component
 package component
 
+//spellchecker:words context path filepath github wisski distillery compose execx unpack errors pkglib umaskfree stream gopkg yaml
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -12,7 +16,7 @@ import (
 	"github.com/FAU-CDI/wisski-distillery/pkg/compose"
 	"github.com/FAU-CDI/wisski-distillery/pkg/execx"
 	"github.com/FAU-CDI/wisski-distillery/pkg/unpack"
-	"github.com/pkg/errors"
+	"github.com/tkw1536/pkglib/errorsx"
 	"github.com/tkw1536/pkglib/fsx"
 	"github.com/tkw1536/pkglib/fsx/umaskfree"
 	"github.com/tkw1536/pkglib/stream"
@@ -194,13 +198,16 @@ type StackWithResources struct {
 	CreateFiles    map[string]string // Files to 'create' but not update after they are setup; guaranteed to be run after MakeDirs
 }
 
-// InstallationContext is a context to install data in
+// InstallationContext is a context to install data in.
 type InstallationContext map[string]string
 
-// Install installs or updates this stack into the directory specified by stack.Stack().
-//
-// Installation is non-interactive, but will provide debugging output onto io.
-// InstallationContext
+type fileMissingFromContextError string
+
+func (fem fileMissingFromContextError) Error() string {
+	return fmt.Sprintf("file missing from context: %q", string(fem))
+}
+
+// InstallationContext.
 func (is StackWithResources) Install(ctx context.Context, progress io.Writer, context InstallationContext) error {
 	if is.ContextPath != "" {
 		// setup the base files
@@ -209,14 +216,15 @@ func (is StackWithResources) Install(ctx context.Context, progress io.Writer, co
 			is.ContextPath,
 			is.Resources,
 			func(dst, src string) {
-				fmt.Fprintf(progress, "[install] %s\n", dst)
+				// #nosec G103
+				fmt.Fprintf(progress, "[install] %s\n", dst) //nolint:errcheck // no way to report error
 			},
 		); err != nil {
-			return err
+			return fmt.Errorf("failed to install directory: %w", err)
 		}
 	} else {
 		if err := umaskfree.MkdirAll(is.Dir, umaskfree.DefaultDirPerm); err != nil {
-			return err
+			return fmt.Errorf("failed to create installation directory: %w", err)
 		}
 	}
 
@@ -224,24 +232,35 @@ func (is StackWithResources) Install(ctx context.Context, progress io.Writer, co
 
 	// update the docker compose file
 	if is.ComposerYML != nil {
-		fmt.Fprintf(progress, "[install] %s\n", dockerComposeYML)
+		if _, err := fmt.Fprintf(progress, "[install] %s\n", dockerComposeYML); err != nil {
+			return fmt.Errorf("failed to log progress: %w", err)
+		}
+
 		if err := doComposeFile(dockerComposeYML, is.ComposerYML); err != nil {
-			return err
+			return fmt.Errorf("failed to update compose file: %w", err)
 		}
 	}
 
 	if err := addComposeFileHeader(dockerComposeYML); err != nil {
-		fmt.Fprintf(progress, "[update] %s\n", dockerComposeYML)
+		err = fmt.Errorf("failed to update docker compose yml: %w", err)
+		if _, err2 := fmt.Fprintf(progress, "[update] %s\n", dockerComposeYML); err2 != nil {
+			err = errorsx.Combine(
+				err,
+				fmt.Errorf("failed to log progress: %w", err2),
+			)
+		}
 		return err
 	}
 
 	// configure .env
 	envDest := filepath.Join(is.Dir, ".env")
 	if is.EnvContext != nil {
-		fmt.Fprintf(progress, "[config]  %s\n", envDest)
+		if _, err := fmt.Fprintf(progress, "[config]  %s\n", envDest); err != nil {
+			return fmt.Errorf("failed to log progress: %w", err)
+		}
 
 		if err := writeEnvFile(envDest, is.TouchFilesPerm, is.EnvContext); err != nil {
-			return err
+			return fmt.Errorf("failed to write environment file: %w", err)
 		}
 	}
 
@@ -250,12 +269,14 @@ func (is StackWithResources) Install(ctx context.Context, progress io.Writer, co
 		// find the destination!
 		dst := filepath.Join(is.Dir, name)
 
-		fmt.Fprintf(progress, "[make]    %s\n", dst)
+		if _, err := fmt.Fprintf(progress, "[make]    %s\n", dst); err != nil {
+			return fmt.Errorf("failed to log progress: %w", err)
+		}
 		if is.MakeDirsPerm == fs.FileMode(0) {
 			is.MakeDirsPerm = umaskfree.DefaultDirPerm
 		}
 		if err := umaskfree.MkdirAll(dst, is.MakeDirsPerm); err != nil {
-			return err
+			return fmt.Errorf("failed to create directory %q: %w", dst, err)
 		}
 	}
 
@@ -264,16 +285,18 @@ func (is StackWithResources) Install(ctx context.Context, progress io.Writer, co
 		// find the source!
 		src, ok := context[name]
 		if !ok {
-			return errors.Errorf("Missing file from context: %q", src)
+			return fileMissingFromContextError(src)
 		}
 
 		// find the destination!
 		dst := filepath.Join(is.Dir, name)
 
 		// copy over file from context
-		fmt.Fprintf(progress, "[copy]    %s (from %s)\n", dst, src)
+		if _, err := fmt.Fprintf(progress, "[copy]    %s (from %s)\n", dst, src); err != nil {
+			return fmt.Errorf("failed to report progress: %w", err)
+		}
 		if err := umaskfree.CopyFile(ctx, dst, src); err != nil {
-			return errors.Wrapf(err, "Unable to copy file %s", src)
+			return fmt.Errorf("unable to copy file %s: %w", src, err)
 		}
 	}
 
@@ -282,9 +305,11 @@ func (is StackWithResources) Install(ctx context.Context, progress io.Writer, co
 		// find the destination!
 		dst := filepath.Join(is.Dir, name)
 
-		fmt.Fprintf(progress, "[touch]   %s\n", dst)
+		if _, err := fmt.Fprintf(progress, "[touch]   %s\n", dst); err != nil {
+			return fmt.Errorf("failed to report progress: %w", err)
+		}
 		if err := umaskfree.Touch(dst, umaskfree.DefaultFilePerm); err != nil {
-			return err
+			return fmt.Errorf("failed to touch %q: %w", dst, err)
 		}
 	}
 	// make sure that certain files exist
@@ -294,26 +319,32 @@ func (is StackWithResources) Install(ctx context.Context, progress io.Writer, co
 
 		exists, err := fsx.Exists(dst)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to check for existence: %w", err)
 		}
 
 		// create the file if it doesn't exist
 		if !exists {
-			fmt.Fprintf(progress, "[create]   %s\n", dst)
+			if _, err := fmt.Fprintf(progress, "[create]   %s\n", dst); err != nil {
+				return fmt.Errorf("failed to report progress: %w", err)
+			}
 			if err := umaskfree.WriteFile(dst, []byte(content), umaskfree.DefaultFilePerm); err != nil {
-				return err
+				return fmt.Errorf("failed to write destination file: %w", err)
 			}
 		} else {
-			fmt.Fprintf(progress, "[skip]   %s\n", dst)
+			if _, err := fmt.Fprintf(progress, "[skip]   %s\n", dst); err != nil {
+				return fmt.Errorf("failed to report progress: %w", err)
+			}
 		}
 	}
 
 	// check that the stack can be loaded
 	{
-		fmt.Fprintln(progress, "[checking]")
+		if _, err := fmt.Fprintln(progress, "[checking]"); err != nil {
+			return fmt.Errorf("failed to report progress: %w", err)
+		}
 		_, err := compose.Open(is.Dir)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to open directory: %w", err)
 		}
 	}
 
@@ -322,21 +353,20 @@ func (is StackWithResources) Install(ctx context.Context, progress io.Writer, co
 
 const composeFileHeader = "# This file was automatically created and is updated by the distillery; DO NOT EDIT.\n\n"
 
-// addComposeFileHeader adds a header to the 'docker-compose.yml' file
-// indicating it is automatically created
-func addComposeFileHeader(path string) error {
+// adds a header to the compose file.
+func addComposeFileHeader(path string) (e error) {
 	// read existing bytes
-	bytes, err := os.ReadFile(path)
+	bytes, err := os.ReadFile(path) // #nosec G304 -- intended
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to read file: %w", err)
 	}
 
 	// overwrite the file
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_TRUNC, umaskfree.DefaultFilePerm)
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_TRUNC, umaskfree.DefaultFilePerm) // #nosec G304 -- intended
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to open compose file: %w", err)
 	}
-	defer f.Close()
+	defer errorsx.Close(f, &e, "file")
 
 	// write the header
 	if _, err := f.WriteString(composeFileHeader); err != nil {
@@ -345,7 +375,7 @@ func addComposeFileHeader(path string) error {
 
 	// write the original content
 	if _, err := f.Write(bytes); err != nil {
-		return err
+		return fmt.Errorf("failed to write compose file; %w", err)
 	}
 
 	return nil
@@ -367,15 +397,15 @@ func doComposeFile(path string, update func(node *yaml.Node) (*yaml.Node, error)
 			mode = stat.Mode()
 
 			// read the yaml bytes
-			bytes, err := os.ReadFile(path)
+			bytes, err := os.ReadFile(path) // #nosec G304 -- intended
 			if err != nil {
-				return errors.Wrap(err, "unable to read existing file")
+				return fmt.Errorf("unable to read existing file: %w", err)
 			}
 
 			// unmarshal it into a node, or bail out!
 			node = new(yaml.Node)
 			if err := yaml.Unmarshal(bytes, node); err != nil {
-				return errors.Wrap(err, "unable to unmarshal existing file")
+				return fmt.Errorf("unable to unmarshal existing file: %w", err)
 			}
 		case errors.Is(err, fs.ErrNotExist):
 			// file does not exist => use default mode
@@ -384,39 +414,42 @@ func doComposeFile(path string, update func(node *yaml.Node) (*yaml.Node, error)
 			// use a nil existing node
 			node = nil
 		default:
-			return err
+			return fmt.Errorf("failed to stat file: %w", err)
 		}
 	}
 
 	// update the node
 	node, err := update(node)
 	if err != nil {
-		return errors.Wrap(err, "update function failed")
+		return fmt.Errorf("update function failed: %w", err)
 	}
 
 	// re-encode the bytes
 	result, err := yaml.Marshal(node)
 	if err != nil {
-		return errors.Wrap(err, "failed to re-marshal")
+		return fmt.Errorf("failed to re-marshal: %w", err)
 	}
 
 	// write the bytes back!
-	return umaskfree.WriteFile(path, result, mode)
+	if err := umaskfree.WriteFile(path, result, mode); err != nil {
+		return fmt.Errorf("failed to write file: %w", err)
+	}
+	return nil
 }
 
-// writeEnvFile writes an environment file
-func writeEnvFile(path string, perm fs.FileMode, variables map[string]string) error {
+// writeEnvFile writes an environment file.
+func writeEnvFile(path string, perm fs.FileMode, variables map[string]string) (e error) {
 	// create the environment file
 	file, err := umaskfree.Create(path, perm)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create env file: %w", err)
 	}
-	defer file.Close()
+	defer errorsx.Close(file, &e, "file")
 
 	// write the file!
 	_, err = compose.WriteEnvFile(file, variables)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to write env file: %w", err)
 	}
 
 	// and return nil

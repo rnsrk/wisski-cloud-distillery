@@ -1,8 +1,11 @@
+//spellchecker:words logger
 package logger
 
+//spellchecker:words context errors reflect github wisski distillery internal component models status pkglib collection
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"reflect"
@@ -14,7 +17,7 @@ import (
 	"github.com/tkw1536/pkglib/collection"
 )
 
-// Logger is responsible for logging backups and snapshots
+// Logger is responsible for logging backups and snapshots.
 type Logger struct {
 	component.Base
 	dependencies struct {
@@ -52,7 +55,7 @@ func (log *Logger) Log(ctx context.Context) ([]models.Export, error) {
 	// query the table!
 	table, err := log.dependencies.SQL.QueryTable(ctx, log)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to query table: %w", err)
 	}
 
 	// find all the exports
@@ -84,7 +87,7 @@ func (log *Logger) Add(ctx context.Context, export models.Export) error {
 	// find the table
 	table, err := log.dependencies.SQL.QueryTable(ctx, log)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to query table: %w", err)
 	}
 
 	// and save it!
@@ -95,7 +98,7 @@ func (log *Logger) Add(ctx context.Context, export models.Export) error {
 	return nil
 }
 
-// Fetch writes the SnapshotLog into the given observation
+// Fetch writes the SnapshotLog into the given observation.
 func (logger *Logger) Fetch(ctx context.Context, flags component.FetcherFlags, target *status.Distillery) (err error) {
 	target.Backups, err = logger.For(ctx, "")
 	return

@@ -1,5 +1,7 @@
+//spellchecker:words server
 package server
 
+//spellchecker:words context http github wisski distillery internal component server handling templating models wdlog pkglib contextx httpx wrap recovery gorilla csrf
 import (
 	"context"
 	"io"
@@ -9,13 +11,13 @@ import (
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/server/handling"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/server/templating"
 	"github.com/FAU-CDI/wisski-distillery/internal/models"
+	"github.com/FAU-CDI/wisski-distillery/internal/wdlog"
 	"github.com/tkw1536/pkglib/contextx"
 	"github.com/tkw1536/pkglib/httpx/mux"
 	"github.com/tkw1536/pkglib/httpx/wrap"
 	"github.com/tkw1536/pkglib/recovery"
 
 	"github.com/gorilla/csrf"
-	"github.com/rs/zerolog"
 )
 
 // Server represents the running control server.
@@ -34,10 +36,7 @@ var (
 	_ component.Installable = (*Server)(nil)
 )
 
-// Server returns an http.Mux that implements the main server instance.
-// The server may spawn background tasks, but these should be terminated once context closes.
-//
-// Logging messages are directed to progress
+// Logging messages are directed to progress.
 func (server *Server) Server(ctx context.Context, progress io.Writer) (public http.Handler, internal http.Handler, err error) {
 	interceptor := server.dependencies.Handleing.TextInterceptor()
 
@@ -73,24 +72,29 @@ func (server *Server) Server(ctx context.Context, progress io.Writer) (public ht
 	// iterate over all the handler
 	for _, s := range server.dependencies.Routeables {
 		routes := s.Routes()
-		zerolog.Ctx(ctx).Info().
-			Str("Name", s.Name()).
-			Str("Prefix", routes.Prefix).
-			Strs("Aliases", routes.Aliases).
-			Bool("Exact", routes.Exact).
-			Bool("CSRF", routes.CSRF).
-			Bool("Decorator", routes.Decorator != nil).
-			Bool("Internal", routes.Internal).
-			Bool("MatchAllDomains", routes.MatchAllDomains).
-			Msg("mounting route")
+		wdlog.Of(ctx).Info(
+			"mounting route",
+
+			"Name", s.Name(),
+			"Prefix", routes.Prefix,
+			"Aliases", routes.Aliases,
+			"Exact", routes.Exact,
+			"CSRF", routes.CSRF,
+			"Decorator", routes.Decorator != nil,
+			"Internal", routes.Internal,
+			"MatchAllDomains", routes.MatchAllDomains,
+		)
 
 		// call the handler for the route
 		handler, err := s.HandleRoute(ctx, routes.Prefix)
 		if err != nil {
-			zerolog.Ctx(ctx).Err(err).
-				Str("Component", s.Name()).
-				Str("Prefix", routes.Prefix).
-				Msg("error mounting route")
+			wdlog.Of(ctx).Error(
+				"error mounting route",
+				"error", err,
+
+				"Component", s.Name(),
+				"Prefix", routes.Prefix,
+			)
 			continue
 		}
 
@@ -124,7 +128,7 @@ func (server *Server) Server(ctx context.Context, progress io.Writer) (public ht
 	return
 }
 
-// CSRF returns a CSRF handler for the given function
+// CSRF returns a CSRF handler for the given function.
 func (server *Server) csrf() func(http.Handler) http.Handler {
 	config := component.GetStill(server).Config
 
@@ -134,10 +138,11 @@ func (server *Server) csrf() func(http.Handler) http.Handler {
 	opts = append(opts, csrf.Path("/"))
 	opts = append(opts, csrf.CookieName(CSRFCookie))
 	opts = append(opts, csrf.FieldName(CSRFCookieField))
-	return csrf.Protect(config.CSRFSecret(), opts...)
+	opts = append(opts, csrf.TrustedOrigins(config.HTTP.PanelDomains()))
+	return csrf.Protect(config.CSRFKey(), opts...)
 }
 
-// WithCSP adds a Content-Security-Policy header to every response
+// WithCSP adds a Content-Security-Policy header to every response.
 func WithCSP(handler http.Handler, policy string) http.Handler {
 	if policy == "" {
 		return handler
@@ -151,8 +156,7 @@ func WithCSP(handler http.Handler, policy string) http.Handler {
 
 const cspHeader = "Content-Security-Policy"
 
-// SetCSP sets the Content-Security-Policy for the given response
-// Any previously set header is discarded
+// Any previously set header is discarded.
 func SetCSP(w http.ResponseWriter, policy string) {
 	header := w.Header()
 

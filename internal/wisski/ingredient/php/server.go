@@ -1,5 +1,6 @@
 package php
 
+//spellchecker:words context embed github wisski distillery internal phpx pkglib stream
 import (
 	"context"
 	_ "embed"
@@ -20,6 +21,6 @@ func (php *PHP) NewServer() *phpx.Server {
 }
 
 func (php *PHP) spawn(ctx context.Context, str stream.IOStream, code string) error {
-	php.dependencies.Barrel.ShellScript(ctx, str, "drush", "php:eval", code)
+	_ = php.dependencies.Barrel.ShellScript(ctx, str, "drush", "php:eval", code)
 	return nil
 }

@@ -1,9 +1,12 @@
+//spellchecker:words auth
 package auth
 
+//spellchecker:words bytes context encoding base image reflect strings github wisski distillery internal component models passwordx errors pquerna totp pkglib password golang crypto bcrypt
 import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"image/png"
 	"reflect"
@@ -12,14 +15,13 @@ import (
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component"
 	"github.com/FAU-CDI/wisski-distillery/internal/models"
 	"github.com/FAU-CDI/wisski-distillery/internal/passwordx"
-	"github.com/pkg/errors"
 	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/totp"
 	"github.com/tkw1536/pkglib/password"
 	"golang.org/x/crypto/bcrypt"
 )
 
-// ErrUserNotFound is returned when a user is not found
+// ErrUserNotFound is returned when a user is not found.
 var ErrUserNotFound = errors.New("user not found")
 
 func (auth *Auth) TableInfo() component.TableInfo {
@@ -29,12 +31,12 @@ func (auth *Auth) TableInfo() component.TableInfo {
 	}
 }
 
-// Users returns all users in the database
+// Users returns all users in the database.
 func (auth *Auth) Users(ctx context.Context) (users []*AuthUser, err error) {
 	// query the user table
 	table, err := auth.dependencies.SQL.QueryTable(ctx, auth)
 	if err != nil {
-		return
+		return nil, fmt.Errorf("failed to query table: %w", err)
 	}
 
 	// find all the users
@@ -67,7 +69,7 @@ func (auth *Auth) User(ctx context.Context, name string) (user *AuthUser, err er
 	// return the user
 	table, err := auth.dependencies.SQL.QueryTable(ctx, auth)
 	if err != nil {
-		return
+		return nil, fmt.Errorf("failed to query table: %w", err)
 	}
 
 	user = &AuthUser{}
@@ -95,7 +97,7 @@ func (auth *Auth) CreateUser(ctx context.Context, name string) (user *AuthUser, 
 	// return the user
 	table, err := auth.dependencies.SQL.QueryTable(ctx, auth)
 	if err != nil {
-		return
+		return nil, fmt.Errorf("failed to query table: %w", err)
 	}
 
 	user = &AuthUser{
@@ -110,14 +112,14 @@ func (auth *Auth) CreateUser(ctx context.Context, name string) (user *AuthUser, 
 	// do the create statement
 	err = table.Select("*").Create(&user.User).Error
 	if err != nil {
-		return nil, errors.Wrapf(err, "Create")
+		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
 
 	user.auth = auth
 	return user, nil
 }
 
-// AuthUser represents an authorized user
+// AuthUser represents an authorized user.
 type AuthUser struct {
 	auth *Auth
 	models.User
@@ -128,7 +130,7 @@ func (au *AuthUser) String() string {
 		return "User{nil}"
 	}
 	hasPassword := len(au.PasswordHash) > 0
-	return fmt.Sprintf("User{Name:%q,Enabled:%t,HasPassword:%t,Admin:%t}", au.User.User, au.User.IsEnabled(), hasPassword, au.User.IsAdmin())
+	return fmt.Sprintf("User{Name:%q,Enabled:%t,HasPassword:%t,Admin:%t}", au.User.User, au.IsEnabled(), hasPassword, au.IsAdmin())
 }
 
 var (
@@ -138,10 +140,16 @@ var (
 )
 
 func (au *AuthUser) TOTP() (*otp.Key, error) {
+	// TODO: make this private
 	if au.TOTPURL == "" {
 		return nil, ErrTOTPDisabled
 	}
-	return otp.NewKeyFromURL(au.TOTPURL)
+
+	key, err := otp.NewKeyFromURL(au.TOTPURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get key from url: %w", err)
+	}
+	return key, nil
 }
 
 // CheckTOTP validates the given totp passcode against the saved secret.
@@ -160,7 +168,7 @@ func (au *AuthUser) CheckTOTP(passcode string) error {
 
 // NewTOTP generates a new TOTP secret, returning a totp key.
 func (au *AuthUser) NewTOTP(ctx context.Context) (*otp.Key, error) {
-	if au.User.IsTOTPEnabled() {
+	if au.IsTOTPEnabled() {
 		return nil, ErrTOTPEnabled
 	}
 
@@ -169,10 +177,10 @@ func (au *AuthUser) NewTOTP(ctx context.Context) (*otp.Key, error) {
 		AccountName: au.User.User,
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to generate TOTP secret: %w", err)
 	}
 
-	au.User.TOTPURL = key.URL()
+	au.TOTPURL = key.URL()
 	return key, au.Save(ctx)
 }
 
@@ -180,21 +188,21 @@ func TOTPLink(secret *otp.Key, width, height int) (string, error) {
 	// make an image
 	img, err := secret.Image(width, height)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to create QR code: %w", err)
 	}
 
 	// encode image as base64
 	var buffer bytes.Buffer
 
 	if err := png.Encode(&buffer, img); err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to encode QR code to png: %w", err)
 	}
 
 	// return the image url
 	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(buffer.Bytes()), nil
 }
 
-// EnableTOTP enables totp for the given user
+// EnableTOTP enables totp for the given user.
 func (au *AuthUser) EnableTOTP(ctx context.Context, passcode string) error {
 	secret, err := au.TOTP()
 	if err != nil {
@@ -204,32 +212,31 @@ func (au *AuthUser) EnableTOTP(ctx context.Context, passcode string) error {
 		return ErrTOTPFailed
 	}
 
-	au.User.SetTOTPEnabled(true)
+	au.SetTOTPEnabled(true)
 	return au.Save(ctx)
-
 }
 
-// DisableTOTP disables totp for the given user
+// DisableTOTP disables totp for the given user.
 func (au *AuthUser) DisableTOTP(ctx context.Context) (err error) {
-	au.User.SetTOTPEnabled(false)
-	au.User.TOTPURL = ""
+	au.SetTOTPEnabled(false)
+	au.TOTPURL = ""
 	return au.Save(ctx)
 }
 
-// SetPassword sets the password for this user and turns the user on
+// SetPassword sets the password for this user and turns the user on.
 func (au *AuthUser) SetPassword(ctx context.Context, password []byte) (err error) {
-	au.User.PasswordHash, err = bcrypt.GenerateFromPassword(password, bcrypt.DefaultCost)
+	au.PasswordHash, err = bcrypt.GenerateFromPassword(password, bcrypt.DefaultCost)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to generate hash from password: %w", err)
 	}
-	au.User.SetEnabled(true)
+	au.SetEnabled(true)
 	return au.Save(ctx)
 }
 
-// UnsetPassword removes the password from this user, and disables them
+// UnsetPassword removes the password from this user, and disables them.
 func (au *AuthUser) UnsetPassword(ctx context.Context) error {
-	au.User.PasswordHash = nil
-	au.User.SetEnabled(false)
+	au.PasswordHash = nil
+	au.SetEnabled(false)
 	return au.Save(ctx)
 }
 
@@ -237,7 +244,7 @@ const MinPasswordLength = 8
 
 var (
 	ErrPolicyBlank    = errors.New("password is blank")
-	ErrPolicyTooShort = errors.New(fmt.Sprintf("password is too short: minimum length %d", MinPasswordLength))
+	ErrPolicyTooShort = fmt.Errorf("password is too short: minimum length %d", MinPasswordLength)
 	ErrPolicyKnown    = errors.New("password is on the list of known passwords")
 	ErrPolicyUsername = errors.New("password may not be identical to username")
 )
@@ -283,22 +290,25 @@ func (au *AuthUser) CheckPassword(ctx context.Context, password []byte) error {
 	if au == nil {
 		return ErrNoUser
 	}
-	if !au.User.IsEnabled() {
+	if !au.IsEnabled() {
 		return ErrUserDisabled
 	}
 
-	if len(au.User.PasswordHash) == 0 {
+	if len(au.PasswordHash) == 0 {
 		return ErrUserDisabled
 	}
 
-	return bcrypt.CompareHashAndPassword(au.User.PasswordHash, password)
+	if err := bcrypt.CompareHashAndPassword(au.PasswordHash, password); err != nil {
+		return fmt.Errorf("wrong password: %w", err)
+	}
+	return nil
 }
 
 func (au *AuthUser) CheckCredentials(ctx context.Context, password []byte, passcode string) error {
 	if err := au.CheckPassword(ctx, password); err != nil {
 		return err
 	}
-	if err := au.CheckTOTP(passcode); err != nil && err != ErrTOTPDisabled {
+	if err := au.CheckTOTP(passcode); err != nil && !errors.Is(err, ErrTOTPDisabled) {
 		return err
 	}
 	return nil
@@ -307,37 +317,37 @@ func (au *AuthUser) CheckCredentials(ctx context.Context, password []byte, passc
 // MakeAdmin makes this user an admin, and saves the update in the database.
 // If the user is already an admin, does not return an error.
 func (au *AuthUser) MakeAdmin(ctx context.Context) error {
-	au.User.SetAdmin(true)
+	au.SetAdmin(true)
 	return au.Save(ctx)
 }
 
 // MakeRegular removes admin rights from this user.
 // If this user is not an dmin, does not return an error.
 func (au *AuthUser) MakeRegular(ctx context.Context) error {
-	au.User.SetAdmin(false)
+	au.SetAdmin(false)
 	return au.Save(ctx)
 }
 
-// Save saves the given user in the database
+// Save saves the given user in the database.
 func (au *AuthUser) Save(ctx context.Context) error {
 	table, err := au.auth.dependencies.SQL.QueryTable(ctx, au.auth)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to query table: %w", err)
 	}
 	return table.Select("*").Updates(&au.User).Error
 }
 
-// Delete deletes the user from the database
+// Delete deletes the user from the database.
 func (au *AuthUser) Delete(ctx context.Context) error {
 	table, err := au.auth.dependencies.SQL.QueryTable(ctx, au.auth)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to query table: %w", err)
 	}
 
 	// run all the user delete hooks
 	for _, c := range au.auth.dependencies.UserDeleteHooks {
 		if err := c.OnUserDelete(ctx, &au.User); err != nil {
-			return err
+			return fmt.Errorf("failed to run delete hook %q: %w", c.Name(), err)
 		}
 	}
 

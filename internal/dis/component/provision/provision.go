@@ -1,5 +1,7 @@
+//spellchecker:words provision
 package provision
 
+//spellchecker:words context errors github wisski distillery internal component instances models ingredient barrel manager logging pkglib
 import (
 	"context"
 	"errors"
@@ -52,14 +54,20 @@ func (flags Flags) Profile() (profile manager.Profile) {
 
 var ErrInstanceAlreadyExists = errors.New("instance with provided slug already exists")
 
+type unknownFlavorError string
+
+func (err unknownFlavorError) Error() string {
+	return fmt.Sprintf("unknown flavor %q", string(err))
+}
+
 func (pv *Provision) validate(flags Flags) error {
 	// check the slug
 	if _, err := pv.dependencies.Instances.IsValidSlug(flags.Slug); err != nil {
-		return err
+		return fmt.Errorf("%q: %w", flags.Slug, err)
 	}
 	// check that we know the flavor
 	if flags.Flavor != "" && !manager.HasProfile(flags.Flavor) {
-		return fmt.Errorf("unknown flavor %q", flags.Flavor)
+		return unknownFlavorError(flags.Flavor)
 	}
 	return nil
 }
@@ -68,30 +76,36 @@ func (pv *Provision) validate(flags Flags) error {
 func (pv *Provision) Provision(progress io.Writer, ctx context.Context, flags Flags) (*wisski.WissKI, error) {
 	// validate that everything is correct
 	if err := pv.validate(flags); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to validate flags: %w", err)
 	}
 
 	// check that it doesn't already exist
-	logging.LogMessage(progress, "Provisioning new WissKI instance %s", flags.Slug)
+	if _, err := logging.LogMessage(progress, "Provisioning new WissKI instance %s", flags.Slug); err != nil {
+		return nil, fmt.Errorf("failed to log message: %w", err)
+	}
 	if exists, err := pv.dependencies.Instances.Has(ctx, flags.Slug); err != nil || exists {
 		return nil, ErrInstanceAlreadyExists
 	}
 
 	// log out what we're doing!
-	fmt.Fprintf(progress, "%#v", flags)
+	if _, err := fmt.Fprintf(progress, "%#v", flags); err != nil {
+		return nil, fmt.Errorf("failed to report progress: %w", err)
+	}
 
 	// make it in-memory
 	instance, err := pv.dependencies.Instances.Create(flags.Slug, flags.System)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create instance data: %w", err)
 	}
 
 	// check that the base directory does not exist
 	{
-		logging.LogMessage(progress, "Checking that base directory %s does not exist", instance.FilesystemBase)
+		if _, err := logging.LogMessage(progress, "Checking that base directory %s does not exist", instance.FilesystemBase); err != nil {
+			return nil, fmt.Errorf("failed to log message: %w", err)
+		}
 		exists, err := fsx.Exists(instance.FilesystemBase)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to check if instance directory exists: %w", err)
 		}
 		if exists {
 			return nil, ErrInstanceAlreadyExists
@@ -101,41 +115,45 @@ func (pv *Provision) Provision(progress io.Writer, ctx context.Context, flags Fl
 	// Store in the instances table!
 	if err := logging.LogOperation(func() error {
 		if err := instance.Bookkeeping().Save(ctx); err != nil {
-			return err
+			return fmt.Errorf("failed to save bookkeeping data: %w", err)
 		}
 
 		return nil
 	}, progress, "Updating bookkeeping database"); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to update bookkeeping database: %w", err)
 	}
 
 	// create all the resources!
 	if err := logging.LogOperation(func() error {
 		domain := instance.Domain()
 		for _, pc := range pv.dependencies.Provisionable {
-			logging.LogMessage(progress, "Provisioning %s resources", pc.Name())
+			if _, err := logging.LogMessage(progress, "Provisioning %s resources", pc.Name()); err != nil {
+				return fmt.Errorf("failed to log message: %w", err)
+			}
 			err := pc.Provision(ctx, instance.Instance, domain)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to provision instance: %w", err)
 			}
 		}
 
 		return nil
 	}, progress, "Provisioning instance-specific resources"); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to provision instance specific resources: %w", err)
 	}
 
 	// run the provision script
 	if err := logging.LogOperation(func() error {
 		return instance.Manager().Provision(ctx, progress, flags.System, flags.Profile())
 	}, progress, "Running setup scripts"); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to run setup scripts: %w", err)
 	}
 
 	// start the container!
-	logging.LogMessage(progress, "Starting Container")
+	if _, err := logging.LogMessage(progress, "Starting Container"); err != nil {
+		return nil, fmt.Errorf("failed to log message: %w", err)
+	}
 	if err := instance.Barrel().Stack().Up(ctx, progress); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to restart container: %w", err)
 	}
 
 	// and return the instance

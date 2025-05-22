@@ -1,5 +1,7 @@
+//spellchecker:words templating
 package templating
 
+//spellchecker:words context embed html template http reflect runtime debug strings time github wisski distillery internal component server handling wdlog gorilla csrf pkglib httpx content form wrap
 import (
 	"context"
 	_ "embed"
@@ -12,8 +14,8 @@ import (
 	"time"
 
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/server/handling"
+	"github.com/FAU-CDI/wisski-distillery/internal/wdlog"
 	"github.com/gorilla/csrf"
-	"github.com/rs/zerolog"
 	"github.com/tkw1536/pkglib/httpx/content"
 	"github.com/tkw1536/pkglib/httpx/form"
 	"github.com/tkw1536/pkglib/httpx/wrap"
@@ -34,9 +36,9 @@ func (tpl *Template[C]) Template() *template.Template {
 	return baseTemplate
 }
 
-// LogTepmplateError logs a non-nil error into the logger found in the request
+// LogTepmplateError logs a non-nil error into the logger found in the request.
 func (*Template[C]) LogTemplateError(r *http.Request, err error) {
-	handling.LogTemplateError(r, err)
+	_ = handling.LogTemplateError(r, err) // no way to report error
 }
 
 // Context generates the context to pass to an instance of the template returned by Template.
@@ -59,8 +61,8 @@ func (tpl *Template[C]) context(r *http.Request, funcs ...FlagFunc) (ctx *tConte
 	ctx.Runtime.Menu = tpl.templating.buildMenu(r)
 
 	// generate the rest of the options
-	ctx.Runtime.Flags = ctx.Runtime.Flags.Apply(r, tpl.p.funcs...)
-	ctx.Runtime.Flags = ctx.Runtime.Flags.Apply(r, funcs...)
+	ctx.Runtime.Flags = ctx.Runtime.Apply(r, tpl.p.funcs...)
+	ctx.Runtime.Flags = ctx.Runtime.Apply(r, funcs...)
 	ctx.updateEmbedded = tpl.p.hasRuntimeFlagsEmbed
 
 	// the main template
@@ -73,20 +75,21 @@ func (tpl *Template[C]) context(r *http.Request, funcs ...FlagFunc) (ctx *tConte
 	return
 }
 
-// ParseForm is like Parse[BaseFormContext]
+// ParseForm is like Parse[BaseFormContext].
 var ParseForm = Parse[FormContext]
 
+//nolint:errname
 type FormContext struct {
 	form.FormContext
 	RuntimeFlags
 }
 
-// NewFormContext returns a new FormContext from an underlying context
+// NewFormContext returns a new FormContext from an underlying context.
 func NewFormContext(context form.FormContext) FormContext {
 	return FormContext{FormContext: context}
 }
 
-// FormTemplateContext returns a new handler for a form with the given base context
+// FormTemplateContext returns a new handler for a form with the given base context.
 func FormTemplateContext(tw *Template[FormContext]) func(ctx form.FormContext, r *http.Request) any {
 	// TODO: Is this needed?
 	return func(ctx form.FormContext, r *http.Request) any {
@@ -142,6 +145,8 @@ func (tw *Template[C]) HTMLHandlerWithFlags(handling *handling.Handling, worker 
 //
 // Callers may not retain references beyond the invocation of the template.
 // Callers must not rely on the internal structure of this tContext.
+//
+//nolint:containedctx
 type tContext[C any] struct {
 	Runtime        RuntimeFlags // underlying flags
 	updateEmbedded bool         // should we automatically update an embedded RuntimeFlags inside the context?
@@ -169,7 +174,7 @@ func (ctx *tContext[C]) Main() (template.HTML, error) {
 	return ctx.renderSafe("main", ctx.tMain, ctx.cMain)
 }
 
-// Footer renders the footer template
+// Footer renders the footer template.
 func (ctx *tContext[C]) Footer() (template.HTML, error) {
 	return ctx.renderSafe("footer", ctx.tFooter, ctx.cFooter)
 }
@@ -178,10 +183,9 @@ const renderSafeError = "Error displaying page. See server log for details. "
 const renderPanicError = "Panic displaying page. See server log for details. "
 
 func (ctx *tContext[C]) renderSafe(name string, t *template.Template, c any) (template.HTML, error) {
-
 	// already done with context => return
 	if err := ctx.ctx.Err(); err != nil {
-		return "", err
+		return "", fmt.Errorf("context already closed: %w", err)
 	}
 
 	value, panicked, panik, stack, err := func() (value template.HTML, panicked bool, panik any, stack []byte, err error) {
@@ -192,12 +196,14 @@ func (ctx *tContext[C]) renderSafe(name string, t *template.Template, c any) (te
 				panik = recover()
 				stack = debug.Stack()
 
-				zerolog.Ctx(ctx.ctx).Error().
-					Str("uri", ctx.Runtime.RequestURI).
-					Str("name", name).
-					Str("panic", fmt.Sprint(panik)).
-					Str("stack", string(stack)).
-					Msg("renderSafe: template panic()ed")
+				wdlog.Of(ctx.ctx).Error(
+					"renderSafe: template panic()ed",
+
+					"uri", ctx.Runtime.RequestURI,
+					"name", name,
+					"panic", fmt.Sprint(panik),
+					"stack", string(stack),
+				)
 			}
 		}()
 
@@ -206,30 +212,33 @@ func (ctx *tContext[C]) renderSafe(name string, t *template.Template, c any) (te
 		panicked = false
 
 		if err != nil {
-			zerolog.Ctx(ctx.ctx).Err(err).
-				Str("uri", ctx.Runtime.RequestURI).
-				Str("name", name).
-				Msg("template errored")
+			wdlog.Of(ctx.ctx).Error(
+				"template errored",
+				"error", err,
+
+				"uri", ctx.Runtime.RequestURI,
+				"name", name,
+			)
 		}
 
-		return template.HTML(builder.String()), false, nil, nil, err
+		return template.HTML(builder.String()), false, nil, nil, err // #nosec G203 -- this is a template and unsafe by default
 	}()
 
 	if err != nil {
 		return renderSafeError, err
 	}
 	if panicked {
-		return renderPanicError, panicErr{value: panik, stack: stack}
+		return renderPanicError, panicError{value: panik, stack: stack}
 	}
 	return value, nil
 }
 
-// panicErr is returned by renderSafe when a panic occurs
-type panicErr struct {
+// panicError is returned by renderSafe when a panic occurs.
+type panicError struct {
 	value any
 	stack []byte
 }
 
-func (pe panicErr) Error() string {
+func (pe panicError) Error() string {
 	return fmt.Sprintf("panic: %v", pe.value)
 }

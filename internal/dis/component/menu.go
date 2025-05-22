@@ -1,19 +1,21 @@
+//spellchecker:words component
 package component
 
+//spellchecker:words html template http sync atomic
 import (
 	"html/template"
 	"net/http"
 	"sync/atomic"
 )
 
-// Menuable is a component that provides a menu
+// Menuable is a component that provides a menu.
 type Menuable interface {
 	Component
 
 	Menu(r *http.Request) []MenuItem
 }
 
-// MenuItem represents an item inside the menu
+// MenuItem represents an item inside the menu.
 type MenuItem struct {
 	Title  string
 	Path   template.URL
@@ -27,7 +29,7 @@ type MenuItem struct {
 
 var dummyCounter uint64
 
-// DummyMenuItem creates a new Dummy Menu Item to be replaced
+// DummyMenuItem creates a new Dummy Menu Item to be replaced.
 func DummyMenuItem() MenuItem {
 	return MenuItem{
 		replaceID: atomic.AddUint64(&dummyCounter, 1),
@@ -36,14 +38,14 @@ func DummyMenuItem() MenuItem {
 
 // ReplaceWith replaces this MenuItem with a different MenuItem.
 // This method returns true if an appropriate DummyMenuItem exists.
-func (mi MenuItem) ReplaceWith(new MenuItem, items []MenuItem) bool {
+func (mi MenuItem) ReplaceWith(replacement MenuItem, items []MenuItem) bool {
 	if mi.replaceID == 0 {
 		// never replace non-dummy items
 		return false
 	}
 	for i, item := range items {
 		if mi.replaceID == item.replaceID {
-			items[i] = new
+			items[i] = replacement
 			return true
 		}
 	}
@@ -57,7 +59,7 @@ func MenuItemSort(a, b MenuItem) int {
 
 type MenuPriority int
 
-// Menu* indicates priorities of the menu
+// Menu* indicates priorities of the menu.
 const (
 	MenuHome MenuPriority = iota
 	MenuNews

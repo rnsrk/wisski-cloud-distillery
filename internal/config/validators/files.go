@@ -1,7 +1,11 @@
+//spellchecker:words validators
 package validators
 
+//spellchecker:words github errors pkglib
 import (
-	"github.com/pkg/errors"
+	"fmt"
+	"io/fs"
+
 	"github.com/tkw1536/pkglib/fsx"
 )
 
@@ -11,10 +15,10 @@ func ValidateFile(path *string, dflt string) error {
 	}
 	isFile, err := fsx.IsRegular(*path, true)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to check for regular file: %w", err)
 	}
 	if !isFile {
-		return errors.Errorf("%q does not exist or is not a file", *path)
+		return fmt.Errorf("%q does not exist or is not a file: %w", *path, fs.ErrNotExist)
 	}
 	return nil
 }
@@ -25,10 +29,10 @@ func ValidateDirectory(path *string, dflt string) error {
 	}
 	isDirectory, err := fsx.IsDirectory(*path, true)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to check for directory: %w", err)
 	}
 	if !isDirectory {
-		return errors.Errorf("%q does not exist or is not a directory", *path)
+		return fmt.Errorf("%q does not exist or is not a directory: %w", *path, fs.ErrNotExist)
 	}
 	return nil
 }

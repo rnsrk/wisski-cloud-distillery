@@ -1,14 +1,16 @@
+//spellchecker:words extras
 package extras
 
+//spellchecker:words context embed github wisski distillery internal phpx status ingredient golang slices
 import (
 	"context"
 	_ "embed"
+	"slices"
 
 	"github.com/FAU-CDI/wisski-distillery/internal/phpx"
 	"github.com/FAU-CDI/wisski-distillery/internal/status"
 	"github.com/FAU-CDI/wisski-distillery/internal/wisski/ingredient"
 	"github.com/FAU-CDI/wisski-distillery/internal/wisski/ingredient/php"
-	"golang.org/x/exp/slices"
 )
 
 type Pathbuilder struct {
