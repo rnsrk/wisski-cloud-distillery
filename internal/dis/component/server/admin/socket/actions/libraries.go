@@ -74,8 +74,8 @@ func (*InstallMiradorJS) Action() InstanceAction {
 	}
 }
 
-func (*InstallMiradorJS) Act(ctx context.Context, instance *wisski.WissKI, in io.Reader, out io.Writer, params ...string) error {
-	return instance.Barrel().Shell(ctx, stream.NewIOStream(out, out, nil), "/runtime/install_mirador.sh")
+func (*InstallMiradorJS) Act(ctx context.Context, instance *wisski.WissKI, in io.Reader, out io.Writer, params ...string) (any, error) {
+	return nil, instance.Barrel().Shell(ctx, stream.NewIOStream(out, out, nil), "/runtime/install_mirador.sh")
 }
 
 type InstallIIPMooViewerJS struct {
@@ -96,6 +96,6 @@ func (*InstallIIPMooViewerJS) Action() InstanceAction {
 	}
 }
 
-func (*InstallIIPMooViewerJS) Act(ctx context.Context, instance *wisski.WissKI, in io.Reader, out io.Writer, params ...string) error {
-	return instance.Barrel().Shell(ctx, stream.NewIOStream(out, out, nil), "/runtime/install_iipmooviewer.sh")
+func (*InstallIIPMooViewerJS) Act(ctx context.Context, instance *wisski.WissKI, in io.Reader, out io.Writer, params ...string) (any, error) {
+	return nil, instance.Barrel().Shell(ctx, stream.NewIOStream(out, out, nil), "/runtime/install_iipmooviewer.sh")
 }
