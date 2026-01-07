@@ -90,6 +90,17 @@ func (provision *Manager) bootstrap(ctx context.Context, progress io.Writer, fla
 		}
 	}
 
+	if _, err := logging.LogMessage(progress, "Adding WissKI VCS repository"); err != nil {
+		return fmt.Errorf("failed to log progress: %w", err)
+	}
+	{
+		// add wisski vcs repository.
+		err := provision.dependencies.Composer.Exec(ctx, progress, "config", "repositories.wisski", "vcs", "https://git.drupalcode.org/project/wisski.git")
+		if err != nil {
+			return fmt.Errorf("failed to configure composer repositories: %w", err)
+		}
+	}
+
 	if _, err := logging.LogMessage(progress, "Configuring Composer"); err != nil {
 		return fmt.Errorf("failed to log progress: %w", err)
 	}

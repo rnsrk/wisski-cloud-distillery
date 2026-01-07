@@ -25,7 +25,7 @@ type Drush struct {
 // Enable enables the given drush modules.
 func (drush *Drush) Enable(ctx context.Context, progress io.Writer, modules ...string) error {
 	if err := drush.Exec(ctx, progress, append([]string{"pm-enable", "--yes"}, modules...)...); err != nil {
-		return fmt.Errorf("drush pm-enable returned error: %w", err)
+		return fmt.Errorf("drush pm-enable returned error: %w (modules: %v)", err, modules)
 	}
 	return nil
 }

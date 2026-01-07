@@ -56,7 +56,6 @@ var (
 			},
 		},
 		"Drupal 10": {
-			Description: "Legacy Version Of Drupal",
 			Description: "Drupal 10 with default packages",
 
 			Drupal: "^10",
@@ -94,7 +93,7 @@ var (
 			Description: "Drupal 11 with colorbox, devel, ds, geofield, geofield_map, kint, leaflet, imagemagick, image_effects, imce and inline_entity_form",
 
 			Drupal: "^11",
-			WissKI: "4.x-dev@dev",
+			WissKI: "dev-scs_base#b9961057a456fb00287b6513bf4e13ee85937595",
 			InstallModules: []string{
 				"drupal/colorbox",
 				"drupal/conditional_fields:4.x-dev@dev",
@@ -108,7 +107,6 @@ var (
 				"drupal/imce:^3",
 				"drupal/inline_entity_form:^3.0@RC",
 				"drupal/leaflet:^10",
-				"kint-php/kint:^5",
 			},
 			EnableModules: []string{
 				"colorbox",

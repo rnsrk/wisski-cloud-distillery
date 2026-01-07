@@ -203,7 +203,7 @@ func (manager *Manager) applyWissKI(ctx context.Context, progress io.Writer, wis
 		}
 		{
 			if err := manager.dependencies.Drush.Enable(ctx, progress,
-				"colorbox", "conditional_fields", "devel", "ds", "ds_extras", "ds_switch_view_mode", "field_group", "file_mdm_exif", "file_mdm_font", "file_mdm", "geofield", "geofield_map", "imce", "leaflet", "leaflet_markercluster", "leaflet_views", "sophron", "sophron_guesser", "wisski", "wisski_authority_document",
+				"colorbox", "conditional_fields", "devel", "ds", "field_group", "geofield", "geofield_map", "imce", "leaflet", "leaflet_views", "sophron", "sophron_guesser", "wisski", "wisski_authority_document",
 			); err != nil {
 				return fmt.Errorf("failed to enable wisski modules: %w", err)
 			}
