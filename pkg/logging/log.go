@@ -1,13 +1,13 @@
 //spellchecker:words logging
 package logging
 
-//spellchecker:words errors strings golang term
+//spellchecker:words strings pkglib errorsx golang term
 import (
 	"fmt"
 	"io"
 	"strings"
 
-	"github.com/tkw1536/pkglib/errorsx"
+	"go.tkw01536.de/pkglib/errorsx"
 	"golang.org/x/term"
 )
 
@@ -42,5 +42,5 @@ func logOperation(progress io.Writer, indent int, format string, args ...interfa
 // streamIsTerminal checks if stream is a terminal.
 func streamIsTerminal(stream any) bool {
 	file, ok := stream.(interface{ Fd() uintptr })
-	return ok && term.IsTerminal(int(file.Fd()))
+	return ok && term.IsTerminal(int(file.Fd())) // #nosec G115 -- term api handles overflow
 }

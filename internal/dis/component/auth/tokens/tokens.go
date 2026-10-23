@@ -1,18 +1,17 @@
 //spellchecker:words tokens
 package tokens
 
-//spellchecker:words context crypto rand reflect strings github wisski distillery internal component models pkglib password gorm
+//spellchecker:words context crypto rand strings github wisski distillery internal component models pkglib password gorm
 import (
 	"context"
 	"crypto/rand"
 	"fmt"
-	"reflect"
 	"strings"
 
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/sql"
 	"github.com/FAU-CDI/wisski-distillery/internal/models"
-	"github.com/tkw1536/pkglib/password"
+	"go.tkw01536.de/pkglib/password"
 	"gorm.io/gorm"
 )
 
@@ -32,13 +31,12 @@ var (
 
 func (tok *Tokens) TableInfo() component.TableInfo {
 	return component.TableInfo{
-		Name:  models.TokensTable,
-		Model: reflect.TypeFor[models.Token](),
+		Model: models.Token{},
 	}
 }
 
 func (tok *Tokens) table(ctx context.Context) (*gorm.DB, error) {
-	conn, err := tok.dependencies.SQL.QueryTable(ctx, tok)
+	conn, err := tok.dependencies.SQL.OpenTable(ctx, tok)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query table: %w", err)
 	}

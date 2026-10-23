@@ -1,16 +1,20 @@
 //spellchecker:words triplestore
 package triplestore
 
-//spellchecker:words embed path filepath time github wisski distillery internal config package component pkglib yamlx gopkg yaml
+//spellchecker:words embed path filepath time github wisski distillery internal config package component docker pkglib yamlx gopkg yaml
 import (
+	"context"
 	"embed"
 	"fmt"
+	"io"
 	"path/filepath"
 	"time"
 
 	config_package "github.com/FAU-CDI/wisski-distillery/internal/config"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component"
-	"github.com/tkw1536/pkglib/yamlx"
+	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/docker"
+	"github.com/FAU-CDI/wisski-distillery/internal/models"
+	"go.tkw01536.de/pkglib/yamlx"
 	"gopkg.in/yaml.v3"
 )
 
@@ -21,6 +25,10 @@ type Triplestore struct {
 	BaseURL string // upstream server url
 
 	PollInterval time.Duration // duration to wait for during wait
+
+	dependencies struct {
+		Docker *docker.Docker
+	}
 }
 
 var (
@@ -38,12 +46,24 @@ func (Triplestore) Context(parent component.InstallationContext) component.Insta
 	return parent
 }
 
+func (ts *Triplestore) PurgeMayFail(instance models.Instance) bool {
+	return instance.DedicatedTriplestore
+}
+
+func (ts *Triplestore) Purge(ctx context.Context, progress io.Writer, instance models.Instance, domain string) error {
+	if err := ts.For(instance).Purge(ctx, progress, false); err != nil {
+		return fmt.Errorf("failed to purge triplestore: %w", err)
+	}
+	return nil
+}
+
 //go:embed all:triplestore
 var resources embed.FS
 
-func (ts *Triplestore) Stack() component.StackWithResources {
+func (ts *Triplestore) OpenStack() (component.StackWithResources, error) {
 	config := component.GetStill(ts).Config
-	return component.MakeStack(ts, component.StackWithResources{
+	//nolint:wrapcheck
+	return component.OpenStack(ts, ts.dependencies.Docker, component.StackWithResources{
 		Resources:   resources,
 		ContextPath: "triplestore",
 

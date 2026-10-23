@@ -13,7 +13,7 @@ import (
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/instances"
 	"github.com/FAU-CDI/wisski-distillery/internal/status"
 	"github.com/FAU-CDI/wisski-distillery/internal/wdlog"
-	"github.com/tkw1536/pkglib/lazy"
+	"go.tkw01536.de/pkglib/lazy"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -40,6 +40,7 @@ func (li *ListInstances) Infos() []status.WissKI {
 
 // ShouldShowList determines if a list should be shown for the given request.
 func (li *ListInstances) ShouldShowList(r *http.Request) bool {
+	// TODO: Log
 	config := component.GetStill(li).Config.Home.List
 	allowPrivate := config.Private.Value
 	allowPublic := config.Public.Value

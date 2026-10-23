@@ -1,7 +1,7 @@
 //spellchecker:words component
 package component
 
-//spellchecker:words context path filepath github wisski distillery internal models errors pkglib umaskfree
+//spellchecker:words context path filepath errors github wisski distillery internal models pkglib errorsx umaskfree
 import (
 	"context"
 	"fmt"
@@ -11,8 +11,8 @@ import (
 	"errors"
 
 	"github.com/FAU-CDI/wisski-distillery/internal/models"
-	"github.com/tkw1536/pkglib/errorsx"
-	"github.com/tkw1536/pkglib/fsx/umaskfree"
+	"go.tkw01536.de/pkglib/errorsx"
+	"go.tkw01536.de/pkglib/fsx/umaskfree"
 )
 
 // Backupable represents a component with a Backup method.
@@ -31,7 +31,7 @@ type Snapshotable interface {
 	Component
 
 	// SnapshotNeedsRunning returns if this Snapshotable requires a running instance.
-	SnapshotNeedsRunning() bool
+	SnapshotNeedsRunning(wisski models.Instance) bool
 
 	// SnapshotName returns a new name to be used as an argument for path.
 	SnapshotName() string
@@ -152,7 +152,7 @@ func (sc *StagingContext) CopyFile(dst, src string) error {
 		return err
 	}
 	sc.sendPath(dst)
-	if err := umaskfree.CopyFile(sc.ctx, dstPath, src); err != nil {
+	if err := umaskfree.CopyFile(dstPath, src); err != nil {
 		return fmt.Errorf("failed to copy file: %w", err)
 	}
 	return nil
@@ -169,7 +169,7 @@ func (sc *StagingContext) CopyDirectory(dst, src string) error {
 		return err
 	}
 
-	if err := umaskfree.CopyDirectory(sc.ctx, dstPath, src, func(dst, src string) {
+	if err := umaskfree.CopyDirectory(dstPath, src, func(dst, src string) {
 		sc.sendPath(dst)
 	}); err != nil {
 		return fmt.Errorf("failed to copy directory: %w", err)

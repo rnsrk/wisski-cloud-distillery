@@ -1,6 +1,6 @@
 package php
 
-//spellchecker:words context strings github wisski distillery internal phpx ingredient barrel
+//spellchecker:words context strings github wisski distillery internal phpx ingredient barrel pkglib errorsx
 import (
 	"context"
 	"fmt"
@@ -9,7 +9,7 @@ import (
 	"github.com/FAU-CDI/wisski-distillery/internal/phpx"
 	"github.com/FAU-CDI/wisski-distillery/internal/wisski/ingredient"
 	"github.com/FAU-CDI/wisski-distillery/internal/wisski/ingredient/barrel"
-	"github.com/tkw1536/pkglib/errorsx"
+	"go.tkw01536.de/pkglib/errorsx"
 )
 
 type PHP struct {
@@ -33,10 +33,10 @@ type PHP struct {
 // It's arguments are encoded as json using [json.Marshal] and decoded within php.
 //
 // The return value of the function is again marshaled with json and returned to the caller.
-func (php *PHP) ExecScript(ctx context.Context, server *phpx.Server, value any, code string, entrypoint string, args ...any) (err error) {
+func (php *PHP) ExecScript(ctx context.Context, server *phpx.Server, value any, code string, entrypoint string, args ...any) (e error) {
 	if server == nil {
 		server = php.NewServer()
-		defer errorsx.Close(server, &err, "server")
+		defer errorsx.Close(server, &e, "server")
 	}
 
 	if code != "" {
@@ -51,10 +51,10 @@ func (php *PHP) ExecScript(ctx context.Context, server *phpx.Server, value any, 
 	return nil
 }
 
-func (php *PHP) EvalCode(ctx context.Context, server *phpx.Server, value any, code string) (err error) {
+func (php *PHP) EvalCode(ctx context.Context, server *phpx.Server, value any, code string) (e error) {
 	if server == nil {
 		server = php.NewServer()
-		defer errorsx.Close(server, &err, "server")
+		defer errorsx.Close(server, &e, "server")
 	}
 
 	if err := server.MarshalEval(ctx, value, code); err != nil {

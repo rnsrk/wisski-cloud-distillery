@@ -18,7 +18,7 @@ import (
 	"github.com/julienschmidt/httprouter"
 
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/instances"
-	"github.com/tkw1536/pkglib/httpx"
+	"go.tkw01536.de/pkglib/httpx"
 )
 
 type Admin struct {
@@ -44,6 +44,8 @@ var (
 	_ component.Routeable         = (*Admin)(nil)
 	_ component.Menuable          = (*Admin)(nil)
 )
+
+const maxBodyFormBytes = 1024 * 1024 // 1 MB
 
 func (admin *Admin) Routes() component.Routes {
 	return component.Routes{
@@ -177,6 +179,11 @@ func (admin *Admin) HandleRoute(ctx context.Context, route string) (handler http
 	{
 		drupal := admin.instanceDrupal(ctx)
 		router.Handler(http.MethodGet, route+"instance/:slug/drupal", drupal)
+	}
+
+	{
+		modules := admin.instanceModules(ctx)
+		router.Handler(http.MethodGet, route+"instance/:slug/modules", modules)
 	}
 
 	// add a router for the login page

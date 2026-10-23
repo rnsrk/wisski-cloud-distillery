@@ -1,8 +1,0 @@
-# Ignore everything
-*
-
-# allow the following files:
-!apache.d/*
-!scripts/*
-!ssh/*
-!php.ini.d/*

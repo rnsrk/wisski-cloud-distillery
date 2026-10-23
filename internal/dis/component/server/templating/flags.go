@@ -1,7 +1,7 @@
 //spellchecker:words templating
 package templating
 
-//spellchecker:words html template http reflect time github wisski distillery internal component server assets wdlog golang slices
+//spellchecker:words html template http reflect slices time github wisski distillery internal component server assets wdlog
 import (
 	"fmt"
 	"html/template"
@@ -41,7 +41,6 @@ type RuntimeFlags struct {
 	Menu        []component.MenuItem // menu at the top of the page
 	StartedAt   time.Time            // time the request started to generate
 	GeneratedAt time.Time            // time the underlying data returned
-	CSRF        template.HTML        // csrf data (if any)
 }
 
 // Returns how long this request took to render.

@@ -1,6 +1,6 @@
 package cmd
 
-//spellchecker:words errors slog http sync github wisski distillery internal wdlog goprogram exit
+//spellchecker:words slog http sync time github wisski distillery internal wdlog cobra pkglib errorsx exit
 import (
 	"fmt"
 	"log/slog"
@@ -9,62 +9,69 @@ import (
 	"sync"
 	"time"
 
-	wisski_distillery "github.com/FAU-CDI/wisski-distillery"
 	"github.com/FAU-CDI/wisski-distillery/internal/cli"
 	"github.com/FAU-CDI/wisski-distillery/internal/wdlog"
-	"github.com/tkw1536/goprogram/exit"
-	"github.com/tkw1536/pkglib/errorsx"
+	"github.com/spf13/cobra"
+	"go.tkw01536.de/pkglib/errorsx"
+	"go.tkw01536.de/pkglib/exit"
 )
 
-// Server is the 'server' command.
-var Server wisski_distillery.Command = server{}
+func NewServerCommand() *cobra.Command {
+	impl := new(server)
+
+	cmd := &cobra.Command{
+		Use:   "server",
+		Short: "starts a server with information about this distillery",
+		Args:  cobra.NoArgs,
+		RunE:  impl.Exec,
+	}
+
+	flags := cmd.Flags()
+	flags.BoolVar(&impl.Trigger, "trigger", false, "instead of running on the existing server, simply trigger a cron run")
+	flags.StringVar(&impl.Bind, "bind", "127.0.0.1:8888", "address to listen on")
+	flags.StringVar(&impl.InternalBind, "internal-bind", "127.0.0.1:9999", "address to listen on for internal server")
+
+	return cmd
+}
 
 type server struct {
-	Trigger      bool   `description:"instead of running on the existing server, simply trigger a cron run" long:"trigger"                                         short:"t"`
-	Bind         string `default:"127.0.0.1:8888"                                                           description:"address to listen on"                     long:"bind"          short:"b"`
-	InternalBind string `default:"127.0.0.1:9999"                                                           description:"address to listen on for internal server" long:"internal-bind" short:"i"`
+	Trigger      bool
+	Bind         string
+	InternalBind string
 }
 
-func (s server) Description() wisski_distillery.Description {
-	return wisski_distillery.Description{
-		Requirements: cli.Requirements{
-			NeedsDistillery: true,
-		},
-		Command:     "server",
-		Description: "starts a server with information about this distillery",
+var errServerTrigger = exit.NewErrorWithCode("failed to trigger", cli.ExitGeneric)
+var errServerGeneric = exit.NewErrorWithCode("unable to instantiate server", cli.ExitGeneric)
+
+func (s *server) Exec(cmd *cobra.Command, args []string) error {
+	dis, err := cli.GetDistillery(cmd, cli.Requirements{
+		NeedsDistillery: true,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to get distillery: %w", err)
 	}
-}
-
-var (
-	errServerListen  = exit.NewErrorWithCode("unable to listen", exit.ExitGeneric)
-	errServerTrigger = exit.NewErrorWithCode("failed to trigger", exit.ExitGeneric)
-	errServerGeneric = exit.NewErrorWithCode("unable to instantiate server", exit.ExitGeneric)
-)
-
-func (s server) Run(context wisski_distillery.Context) error {
-	dis := context.Environment
 
 	// if the caller requested a trigger, just trigger the cron tasks
 	if s.Trigger {
-		if err := dis.Control().Trigger(context.Context); err != nil {
+		if err := dis.Control().Trigger(cmd.Context()); err != nil {
 			return fmt.Errorf("%w: %w", errServerTrigger, err)
 		}
 	}
 
 	{
 		// create a channel for notifications
-		notify, cancel := dis.Cron().Listen(context.Context)
+		notify, cancel := dis.Cron().Listen(cmd.Context())
 		defer cancel()
 
 		// start the cron tasks
-		done := dis.Cron().Start(context.Context, notify)
+		done := dis.Cron().Start(cmd.Context(), notify)
 		defer func() {
 			<-done
 		}()
 	}
 
 	// and start the server
-	public, internal, err := dis.Control().Server(context.Context, context.Stderr)
+	public, internal, err := dis.Control().Server(cmd.Context(), cmd.ErrOrStderr())
 	if err != nil {
 		return fmt.Errorf("%w: %w", errServerGeneric, err)
 	}
@@ -77,20 +84,21 @@ func (s server) Run(context wisski_distillery.Context) error {
 	publicC := make(chan error)
 	var shutdownPublic func()
 	{
-		log := wdlog.Of(context.Context)
+		log := wdlog.Of(cmd.Context())
 		log.Info(
 			"listening public server",
 			"bind", s.Bind,
 		)
 
-		publicL, err := net.Listen("tcp", s.Bind)
+		var lc net.ListenConfig
+		publicL, err := lc.Listen(cmd.Context(), "tcp", s.Bind)
 		if err != nil {
 			return fmt.Errorf("%w: %w", errServerListen, err)
 		}
 
 		// shutdown the public server when done!
 		shutdownPublic = sync.OnceFunc(func() {
-			if err := publicS.Shutdown(context.Context); err != nil {
+			if err := publicS.Shutdown(cmd.Context()); err != nil {
 				log.Error("failed to shutdown public server", slog.Any("error", err))
 			}
 		})
@@ -110,19 +118,20 @@ func (s server) Run(context wisski_distillery.Context) error {
 
 	var shutdownInternal func()
 	{
-		log := wdlog.Of(context.Context)
+		log := wdlog.Of(cmd.Context())
 		log.Info(
 			"listening internal server",
 			"bind", s.InternalBind,
 		)
-		internalL, err := net.Listen("tcp", s.InternalBind)
+		var lc net.ListenConfig
+		internalL, err := lc.Listen(cmd.Context(), "tcp", s.InternalBind)
 		if err != nil {
 			return fmt.Errorf("%w: %w", errServerListen, err)
 		}
 
 		// shutdown the internal server when done!
 		shutdownInternal = sync.OnceFunc(func() {
-			if err := internalS.Shutdown(context.Context); err != nil {
+			if err := internalS.Shutdown(cmd.Context()); err != nil {
 				log.Error("failed to shutdown internal server", slog.Any("error", err))
 			}
 		})
@@ -135,9 +144,9 @@ func (s server) Run(context wisski_distillery.Context) error {
 
 	// shutdown everything when the context closes
 	go func() {
-		<-context.Context.Done()
+		<-cmd.Context().Done()
 
-		log := wdlog.Of(context.Context)
+		log := wdlog.Of(cmd.Context())
 		log.Info("shutting down server")
 
 		shutdownPublic()

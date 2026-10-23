@@ -3,11 +3,11 @@
 //spellchecker:words phpx
 package phpx
 
-//spellchecker:words context github pkglib stream
+//spellchecker:words context pkglib stream
 import (
 	"context"
 
-	"github.com/tkw1536/pkglib/stream"
+	"go.tkw01536.de/pkglib/stream"
 )
 
 // Executor represents anything that can spawn.

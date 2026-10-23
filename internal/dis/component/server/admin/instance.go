@@ -1,7 +1,7 @@
 //spellchecker:words admin
 package admin
 
-//spellchecker:words context html template http github wisski distillery internal component instances server assets templating models status julienschmidt httprouter pkglib httpx embed
+//spellchecker:words context errors html template http github wisski distillery internal component instances server assets templating models status wdlog julienschmidt httprouter pkglib httpx embed
 import (
 	"context"
 	"errors"
@@ -10,17 +10,22 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/FAU-CDI/wisski-distillery/internal/config"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/instances"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/server/assets"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/server/templating"
 	"github.com/FAU-CDI/wisski-distillery/internal/models"
 	"github.com/FAU-CDI/wisski-distillery/internal/status"
+	"github.com/FAU-CDI/wisski-distillery/internal/wdlog"
+	"github.com/FAU-CDI/wisski-distillery/internal/wisski"
 	"github.com/julienschmidt/httprouter"
-	"github.com/tkw1536/pkglib/httpx"
+	"go.tkw01536.de/pkglib/httpx"
 
 	_ "embed"
 )
+
+//spellchecker:words nolint contextcheck
 
 //go:embed "html/instance.html"
 var instanceHTML []byte
@@ -33,11 +38,13 @@ var instanceTemplate = templating.Parse[instanceContext](
 type instanceContext struct {
 	templating.RuntimeFlags
 
+	DistilleryConfig *config.Config
+
 	Instance models.Instance
 	Info     status.WissKI
 }
 
-func (admin *Admin) instance(context.Context) http.Handler {
+func (admin *Admin) instance(ctx context.Context) http.Handler {
 	tpl := instanceTemplate.Prepare(
 		admin.dependencies.Templating,
 		templating.Crumbs(
@@ -48,10 +55,10 @@ func (admin *Admin) instance(context.Context) http.Handler {
 	)
 
 	return tpl.HTMLHandlerWithFlags(admin.dependencies.Handling, func(r *http.Request) (ic instanceContext, funcs []templating.FlagFunc, err error) {
-		slug := httprouter.ParamsFromContext(r.Context()).ByName("slug")
+		slug := httprouter.ParamsFromContext(r.Context()).ByName("slug") //nolint:contextcheck
 
 		// find the instance itself!
-		instance, err := admin.dependencies.Instances.WissKI(r.Context(), slug)
+		instance, err := admin.dependencies.Instances.WissKI(r.Context(), slug) //nolint:contextcheck
 		if errors.Is(err, instances.ErrWissKINotFound) {
 			return ic, nil, httpx.ErrNotFound
 		}
@@ -61,25 +68,69 @@ func (admin *Admin) instance(context.Context) http.Handler {
 		ic.Instance = instance.Instance
 
 		// get some more info about the wisski
-		ic.Info, err = instance.Info().Information(r.Context(), true)
+		ic.Info, err = instance.Info().Information(r.Context(), true) //nolint:contextcheck
 		if err != nil {
-			return ic, nil, fmt.Errorf("failed to get information: %w", err)
+			wdlog.Of(ctx).Warn(
+				"failed to fetch information for instance",
+				"error", err,
+				"slug", slug,
+			)
 		}
 
+		ic.DistilleryConfig = component.GetStill(admin).Config
+
 		escapedSlug := url.PathEscape(slug)
+		var presentInstanceFunc templating.FlagFunc
+		presentInstanceFunc, err = admin.preparePanelInstancePage(r, instance, "overview")
+		if err != nil {
+			return ic, nil, fmt.Errorf("failed to prepare instance page: %w", err)
+		}
 		funcs = []templating.FlagFunc{
 			templating.ReplaceCrumb(menuInstance, component.MenuItem{Title: "Instance", Path: template.URL("/admin/instance/" + escapedSlug)}), // #nosec G203 -- escaped and safe
 			templating.Title(instance.Slug),
-
-			admin.instanceTabs(escapedSlug, "overview"),
+			presentInstanceFunc,
 		}
 
 		return
 	})
 }
 
+// preparePanelInstancePage prepares an instance page for the panel.
+// It sets up the menu and actions.
+//
+//nolint:unparam // reserved for future use, could eventually return an error
+func (admin *Admin) preparePanelInstancePage(_ *http.Request, instance *wisski.WissKI, active string) (templating.FlagFunc, error) {
+	menuFunc := admin.instanceMenu(url.PathEscape(instance.Slug), active)
+
+	instanceLink := func(title string, path string) (item component.MenuItem) {
+		item.Title = title
+		item.Path = template.URL(instance.URLTo(path).String()) // #nosec G203 -- attacker cannot control the path
+		return
+	}
+
+	return func(flags templating.Flags, r *http.Request) templating.Flags {
+		flags = menuFunc(flags, r)
+
+		flags.Actions = []component.MenuItem{
+			{
+				Title: "Instance Login",
+				Path:  template.URL(status.NextURL(instance.URL().String())), // #nosec G203 -- attacker cannot control the url
+			},
+
+			instanceLink("Front", "/"),
+			instanceLink("Structure", "/admin/structure/wisski_core"),
+			instanceLink("Pathbuilders", "/admin/config/wisski/pathbuilder"),
+			instanceLink("People", "/admin/people"),
+			instanceLink("Status Report", "/admin/reports/status"),
+			instanceLink("Logs", "/admin/reports/dblog"),
+		}
+
+		return flags
+	}, nil
+}
+
 // #nosec G203 -- escaped and safe
-func (admin *Admin) instanceTabs(slugEscaped string, active string) templating.FlagFunc {
+func (admin *Admin) instanceMenu(slugEscaped string, active string) templating.FlagFunc {
 	return func(flags templating.Flags, r *http.Request) templating.Flags {
 		flags.Tabs = []component.MenuItem{
 			{Title: "Overview", Path: template.URL("/admin/instance/" + slugEscaped), Active: active == "overview"},
@@ -87,6 +138,7 @@ func (admin *Admin) instanceTabs(slugEscaped string, active string) templating.F
 			{Title: "Users & Grants", Path: template.URL("/admin/instance/" + slugEscaped + "/users"), Active: active == "users"},
 			{Title: "Triplestore", Path: template.URL("/admin/instance/" + slugEscaped + "/triplestore"), Active: active == "triplestore"},
 			{Title: "Drupal", Path: template.URL("/admin/instance/" + slugEscaped + "/drupal"), Active: active == "drupal"},
+			{Title: "Modules", Path: template.URL("/admin/instance/" + slugEscaped + "/modules"), Active: active == "modules"},
 			{Title: "WissKI Data", Path: template.URL("/admin/instance/" + slugEscaped + "/data"), Active: active == "data"},
 			{Title: "WissKI Stats", Path: template.URL("/admin/instance/" + slugEscaped + "/stats"), Active: active == "stats"},
 			{Title: "SSH", Path: template.URL("/admin/instance/" + slugEscaped + "/ssh"), Active: active == "ssh"},

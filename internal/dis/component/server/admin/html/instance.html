@@ -1,6 +1,21 @@
+{{ if not .Info.OK }}
+<div class="pure-u-1 wisski-broken-message">
+    <h2>Fetching Information for this instance returned an error</h2>
+
+    <p>
+        <code>{{ .Info.Error }}</code>
+    </p>
+
+    <p>
+        Some functionality might be unavailable or result in errors.
+    </p>
+</div>
+{{ end }}
+
 <div class="pure-u-1">
     <h2 id="overview">Overview</h2>
 </div>
+
 <div class="pure-u-1 pure-u-xl-1-2">
     <div class="h-md-padding">
         <div class="overflow">
@@ -31,6 +46,16 @@
                     </tr>
                     <tr>
                         <td>
+                            Comment
+                            <br>
+                            <small>(use <em>Rebuild</em> to edit)</small>
+                        </td>
+                        <td>
+                            {{ .Instance.Comment }}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
                             Running
                         </td>
                         <td>
@@ -42,7 +67,11 @@
                                 <button class="remote-action pure-button pure-button-danger" data-action="stop" data-param="{{ .Instance.Slug }}" data-buffer="1000" data-force-reload>
                                     Stop
                                 </button>
+                                <button class="remote-action pure-button" {% if .Info.Running %}{% else %}disabled="disabled"{% end %} data-action="instance_log" data-param="{{ .Instance.Slug }}" data-buffer="1000" data-force-reload data-cancel-text="Stop">
+                                Logs
+                            </button>
                             </div>
+
                             
                         </td>
                     </tr>
@@ -52,6 +81,31 @@
                         </td>
                         <td>
                             <code>{{ .Info.Locked }}</code>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            PHP Version
+                        </td>
+                        <td>
+                            <code>{{ .Info.PHPVersion }}</code>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            Drupal Version
+                        </td>
+                        <td>
+                            <code>{{ .Info.DrupalVersion }}</code>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <td>
+                            WissKI Version
+                        </td>
+                        <td>
+                            <code>{{ .Info.WissKIVersion }}</code>
                         </td>
                     </tr>
                 </tbody>
@@ -114,14 +168,21 @@
                             <code>{{ .Instance.System.ContentSecurityPolicy }}</code>
                         </td>
                     </tr>
+                    <tr>
+                        <td>
+                            IP Allow List
+                        </td>
+                        <td>
+                            <code>{{ .Instance.System.IPAllowlist }}</code>
+                        </td>
+                    </tr>
                 </tbody>
             </table>
         </div>
     </div>
 </div>
 
-
-<div class="pure-u-1 pure-u-xl-1-2">
+<div class="pure-u-1 pure-u-xl-2-3">
     <div class="h-md-padding">
         <div class="overflow">
             <table class="pure-table pure-table-bordered">
@@ -143,7 +204,22 @@
                     </tr>
                     <tr>
                         <td>
+                            Dedicated SQL Server
+                        </td>
+                        <td>
+                            <code>{{ .Instance.System.DedicatedSQL }}</code>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
                             SQL DB
+
+                            {{ $pma := .DistilleryConfig.HTTP.PhpMyAdminURL }}
+                            {{ $globalsql := not .Instance.System.DedicatedSQL }}
+                            {{ if and $pma $globalsql }}
+                                <br>
+                                <a href="{{ $pma }}" class="pure-button" target="_blank" rel="noopener noreferer">PHPMyAdmin</a>
+                            {{ end }}
                         </td>
                         <td>
                             <code class="copy">{{ .Instance.SqlDatabase }}</code>
@@ -167,7 +243,34 @@
                     </tr>
                     <tr>
                         <td>
+                            Dedicated Triplestore
+                        </td>
+                        <td>
+                            <code>{{ .Instance.System.DedicatedTriplestore }}</code>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            Solr Server
+                        </td>
+                        <td>
+                            <code>{{ .Instance.System.SolrServer }}</code>
+                            {{ if .Instance.System.SolrServer }}
+                                <br>
+                                <code>http://solr:8983</code>
+                            {{ end }}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
                             TS Repo
+
+                            {{ $ts := .DistilleryConfig.HTTP.TSURL }}
+                            {{ $globalts := not .Instance.System.DedicatedTriplestore }}
+                            {{ if and $ts $globalts }}
+                                <br>
+                                <a href="{{ $ts }}" class="pure-button" target="_blank" rel="noopener noreferer">Workbench</a>
+                            {{ end }}
                         </td>
                         <td>
                             <code class="copy">{{ .Instance.GraphDBRepository }}</code>
@@ -196,7 +299,9 @@
     </div>
 </div>
 
-<div class="pure-u-1 pure-u-xl-1-2">
+
+
+<div class="pure-u-1 pure-u-xl-1-3">
     <div class="h-md-padding">
         <div class="overflow">
             <table class="pure-table pure-table-bordered">

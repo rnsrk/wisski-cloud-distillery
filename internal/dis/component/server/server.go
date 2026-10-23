@@ -1,23 +1,23 @@
 //spellchecker:words server
 package server
 
-//spellchecker:words context http github wisski distillery internal component server handling templating models wdlog pkglib contextx httpx wrap recovery gorilla csrf
+//spellchecker:words context http github wisski distillery internal component docker server handling templating models wdlog pkglib httpx wrap recovery gorilla csrf
 import (
 	"context"
 	"io"
 	"net/http"
 
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component"
+	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/docker"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/server/handling"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/server/templating"
 	"github.com/FAU-CDI/wisski-distillery/internal/models"
 	"github.com/FAU-CDI/wisski-distillery/internal/wdlog"
-	"github.com/tkw1536/pkglib/contextx"
-	"github.com/tkw1536/pkglib/httpx/mux"
-	"github.com/tkw1536/pkglib/httpx/wrap"
-	"github.com/tkw1536/pkglib/recovery"
+	"go.tkw01536.de/pkglib/httpx/mux"
+	"go.tkw01536.de/pkglib/httpx/wrap"
+	"go.tkw01536.de/pkglib/recovery"
 
-	"github.com/gorilla/csrf"
+	csrf "filippo.io/csrf/gorilla"
 )
 
 // Server represents the running control server.
@@ -29,6 +29,8 @@ type Server struct {
 
 		Templating *templating.Templating
 		Handleing  *handling.Handling
+
+		Docker *docker.Docker
 	}
 }
 
@@ -54,13 +56,20 @@ func (server *Server) Server(ctx context.Context, progress io.Writer) (public ht
 			// determine if we are on a slug from a host
 			slug, ok := component.GetStill(server).Config.HTTP.NormSlugFromHost(r.Host)
 
-			rctx := component.WithRouteContext(r.Context(), component.RouteContext{
-				DefaultDomain: slug == "" && ok,
-			})
-			ctx := contextx.WithValuesOf(rctx, ctx)
+			// copy over the route context and the logger
+			// into the child context
+			rctx := wdlog.Set(
+				component.WithRouteContext(
+					r.Context(),
+					component.RouteContext{
+						DefaultDomain: slug == "" && ok,
+					},
+				),
+				wdlog.Of(ctx),
+			)
 
 			// serve with the next context
-			h.ServeHTTP(w, r.WithContext(ctx))
+			h.ServeHTTP(w, r.WithContext(rctx)) //nolint:contextcheck // intentional
 		})
 	}
 
@@ -132,14 +141,10 @@ func (server *Server) Server(ctx context.Context, progress io.Writer) (public ht
 func (server *Server) csrf() func(http.Handler) http.Handler {
 	config := component.GetStill(server).Config
 
-	var opts []csrf.Option
-	opts = append(opts, csrf.Secure(config.HTTP.HTTPSEnabled()))
-	opts = append(opts, csrf.SameSite(csrf.SameSiteStrictMode))
-	opts = append(opts, csrf.Path("/"))
-	opts = append(opts, csrf.CookieName(CSRFCookie))
-	opts = append(opts, csrf.FieldName(CSRFCookieField))
-	opts = append(opts, csrf.TrustedOrigins(config.HTTP.PanelDomains()))
-	return csrf.Protect(config.CSRFKey(), opts...)
+	return csrf.Protect(
+		config.CSRFKey(),
+		csrf.TrustedOrigins(config.HTTP.PanelDomains()),
+	)
 }
 
 // WithCSP adds a Content-Security-Policy header to every response.

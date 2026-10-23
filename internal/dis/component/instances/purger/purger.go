@@ -1,7 +1,7 @@
 //spellchecker:words purger
 package purger
 
-//spellchecker:words context github wisski distillery internal component instances models logging goprogram exit
+//spellchecker:words context errors github wisski distillery internal component instances models logging pkglib errorsx
 import (
 	"context"
 	"errors"
@@ -13,6 +13,7 @@ import (
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/instances"
 	"github.com/FAU-CDI/wisski-distillery/internal/models"
 	"github.com/FAU-CDI/wisski-distillery/pkg/logging"
+	"go.tkw01536.de/pkglib/errorsx"
 )
 
 // Purger purges instances from the distillery.
@@ -26,7 +27,7 @@ type Purger struct {
 
 // Purge permanently purges an instance from the distillery.
 // The instance does not have to exist; in which case the resources are also deleted.
-func (purger *Purger) Purge(ctx context.Context, out io.Writer, slug string) error {
+func (purger *Purger) Purge(ctx context.Context, out io.Writer, slug string) (e error) {
 	if _, err := logging.LogMessage(out, "Checking bookkeeping table"); err != nil {
 		return fmt.Errorf("failed to log message: %w", err)
 	}
@@ -40,19 +41,19 @@ func (purger *Purger) Purge(ctx context.Context, out io.Writer, slug string) err
 	}
 
 	// remove docker stack
-	if _, err := logging.LogMessage(out, "Stopping and removing docker container"); err != nil {
+	if _, err := logging.LogMessage(out, "Stopping docker stack"); err != nil {
 		return fmt.Errorf("failed to log message: %w", err)
-	}
-	if err := instance.Barrel().Stack().Down(ctx, out); err != nil {
-		_, _ = fmt.Fprintln(out, err)
 	}
 
-	// remove the filesystem
-	if _, err := logging.LogMessage(out, "Removing from filesystem %s", instance.FilesystemBase); err != nil {
-		return fmt.Errorf("failed to log message: %w", err)
+	stack, err := instance.Barrel().OpenStack()
+	if err != nil {
+		return fmt.Errorf("failed to open stack: %w", err)
 	}
-	if err := os.RemoveAll(instance.FilesystemBase); err != nil {
-		_, _ = fmt.Fprintln(out, err) // already handling error
+	defer errorsx.Close(stack, &e, "stack")
+
+	// stop the stack initially
+	if err := stack.Down(ctx, out); err != nil {
+		_, _ = fmt.Fprintln(out, err)
 	}
 
 	// purge all the instance specific resources
@@ -62,15 +63,34 @@ func (purger *Purger) Purge(ctx context.Context, out io.Writer, slug string) err
 			if _, err := logging.LogMessage(out, "Purging %s resources", pc.Name()); err != nil {
 				return fmt.Errorf("failed to log message: %w", err)
 			}
-			err := pc.Purge(ctx, instance.Instance, domain)
+			err := pc.Purge(ctx, out, instance.Instance, domain)
 			if err != nil {
-				return fmt.Errorf("failed to purge %s for instance %q: %w", pc.Name(), instance.Slug, err)
+				if !pc.PurgeMayFail(instance.Instance) {
+					return fmt.Errorf("failed to purge %s: %w", pc.Name(), err)
+				}
+				if _, err := fmt.Fprintln(out, err); err != nil {
+					return fmt.Errorf("failed to log error: %w", err)
+				}
 			}
 		}
 
 		return nil
 	}, out, "Purging instance-specific resources"); err != nil {
 		return fmt.Errorf("unable to purge instance %q: %w", slug, err)
+	}
+
+	// remove the stack again, in case any of the purging re-created containers.
+	// This *should not* happen, but whatever ....
+	if err := stack.Down(ctx, out); err != nil {
+		_, _ = fmt.Fprintln(out, err)
+	}
+
+	// remove the filesystem
+	if _, err := logging.LogMessage(out, "Removing from filesystem %s", instance.FilesystemBase); err != nil {
+		return fmt.Errorf("failed to log message: %w", err)
+	}
+	if err := os.RemoveAll(instance.FilesystemBase); err != nil {
+		_, _ = fmt.Fprintln(out, err) // already handling error
 	}
 
 	// remove from bookkeeping
@@ -85,9 +105,7 @@ func (purger *Purger) Purge(ctx context.Context, out io.Writer, slug string) err
 	if _, err := logging.LogMessage(out, "Remove lock data"); err != nil {
 		return fmt.Errorf("failed to log message: %w", err)
 	}
-	if instance.Locker().TryUnlock(ctx) {
-		_, _ = fmt.Fprintln(out, "instance was not locked")
-	}
+	instance.Locker().Unlock(ctx)
 
 	return nil
 }

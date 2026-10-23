@@ -7,7 +7,7 @@ import (
 	"io"
 
 	"github.com/FAU-CDI/wisski-distillery/internal/config/validators"
-	"github.com/tkw1536/pkglib/validator"
+	"go.tkw01536.de/pkglib/validator"
 	"gopkg.in/yaml.v3"
 )
 
@@ -38,7 +38,7 @@ func (config *Config) Validate() error {
 func (config *Config) Marshal(dest io.Writer) error {
 	encoder := yaml.NewEncoder(dest)
 	encoder.SetIndent(4)
-	if err := encoder.Encode(config); err != nil {
+	if err := encoder.Encode(config); err != nil { // #nosec G117 - censored on demand by other code
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 	return nil

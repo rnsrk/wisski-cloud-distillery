@@ -1,7 +1,7 @@
 //spellchecker:words barrel
 package barrel
 
-//spellchecker:words context time github wisski distillery internal component meta status ingredient locker mstore
+//spellchecker:words context errors time github wisski distillery internal component meta status ingredient mstore pkglib errorsx
 import (
 	"context"
 	"errors"
@@ -13,20 +13,24 @@ import (
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/meta"
 	"github.com/FAU-CDI/wisski-distillery/internal/status"
 	"github.com/FAU-CDI/wisski-distillery/internal/wisski/ingredient"
-	"github.com/FAU-CDI/wisski-distillery/internal/wisski/ingredient/locker"
 	"github.com/FAU-CDI/wisski-distillery/internal/wisski/ingredient/mstore"
+	"go.tkw01536.de/pkglib/errorsx"
 )
 
 // Build builds or rebuilds the barrel connected to this instance.
 //
 // It also logs the current time into the metadata belonging to this instance.
-func (barrel *Barrel) Build(ctx context.Context, progress io.Writer, start bool) error {
-	if !barrel.dependencies.Locker.TryLock(ctx) {
-		return locker.ErrLocked
+func (barrel *Barrel) Build(ctx context.Context, progress io.Writer, start bool) (e error) {
+	if err := barrel.dependencies.Locker.TryLock(ctx); err != nil {
+		return fmt.Errorf("unable to lock instance: %w", err)
 	}
 	defer barrel.dependencies.Locker.Unlock(ctx)
 
-	stack := barrel.Stack()
+	stack, err := barrel.OpenStack()
+	if err != nil {
+		return fmt.Errorf("failed to open stack: %w", err)
+	}
+	defer errorsx.Close(stack, &e, "stack")
 
 	var context component.InstallationContext
 

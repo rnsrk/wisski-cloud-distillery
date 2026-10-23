@@ -1,14 +1,14 @@
 //spellchecker:words templating
 package templating
 
-//spellchecker:words html template http github wisski distillery internal component pkglib httpx golang slices
+//spellchecker:words html template http slices github wisski distillery internal component pkglib httpx
 import (
 	"html/template"
 	"net/http"
 	"slices"
 
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component"
-	"github.com/tkw1536/pkglib/httpx/mux"
+	"go.tkw01536.de/pkglib/httpx/mux"
 )
 
 // buildMenu builds the manu for this request for all known components in this distillery.
@@ -18,7 +18,7 @@ func (tpl *Templating) buildMenu(r *http.Request) []component.MenuItem {
 	path := mux.NormalizePath(r.URL.Path)
 
 	// get the static menu items, and then return all the regular ones
-	var items []component.MenuItem
+	var items []component.MenuItem //nolint:prealloc
 	for _, m := range tpl.dependencies.Menuable {
 		items = append(items, m.Menu(r)...)
 	}

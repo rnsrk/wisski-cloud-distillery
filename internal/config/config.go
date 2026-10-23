@@ -3,7 +3,7 @@
 //spellchecker:words config
 package config
 
-//spellchecker:words hash math rand reflect time github pkglib reflectx yamlx gopkg yaml embed
+//spellchecker:words hash math rand reflect time pkglib reflectx yamlx golang crypto scrypt gopkg yaml embed
 import (
 	"fmt"
 	"hash/fnv"
@@ -11,8 +11,8 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/tkw1536/pkglib/reflectx"
-	"github.com/tkw1536/pkglib/yamlx"
+	"go.tkw01536.de/pkglib/reflectx"
+	"go.tkw01536.de/pkglib/yamlx"
 	"golang.org/x/crypto/scrypt"
 	"gopkg.in/yaml.v3"
 

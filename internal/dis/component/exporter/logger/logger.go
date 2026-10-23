@@ -1,20 +1,17 @@
 //spellchecker:words logger
 package logger
 
-//spellchecker:words context errors reflect github wisski distillery internal component models status pkglib collection
+//spellchecker:words context github wisski distillery internal component models status wdlog pkglib collection
 import (
 	"context"
-	"errors"
 	"fmt"
-	"io/fs"
-	"os"
-	"reflect"
 
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/sql"
 	"github.com/FAU-CDI/wisski-distillery/internal/models"
 	"github.com/FAU-CDI/wisski-distillery/internal/status"
-	"github.com/tkw1536/pkglib/collection"
+	"github.com/FAU-CDI/wisski-distillery/internal/wdlog"
+	"go.tkw01536.de/pkglib/collection"
 )
 
 // Logger is responsible for logging backups and snapshots.
@@ -31,8 +28,7 @@ var (
 
 func (*Logger) TableInfo() component.TableInfo {
 	return component.TableInfo{
-		Model: reflect.TypeFor[models.Export](),
-		Name:  models.ExportTable,
+		Model: models.Export{},
 	}
 }
 
@@ -50,50 +46,54 @@ func (log *Logger) For(ctx context.Context, slug string) (exports []models.Expor
 	}), nil
 }
 
-// Log retrieves (and prunes) all entries in the snapshot log.
+// Log retrieves and cleans up all entries in the snapshot log.
 func (log *Logger) Log(ctx context.Context) ([]models.Export, error) {
-	// query the table!
-	table, err := log.dependencies.SQL.QueryTable(ctx, log)
+	table, err := sql.OpenInterface[models.Export](ctx, log.dependencies.SQL, log)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query table: %w", err)
+		return nil, fmt.Errorf("failed to open interface: %w", err)
 	}
 
 	// find all the exports
-	var exports []models.Export
-	res := table.Find(&exports)
-	if res.Error != nil {
-		return nil, res.Error
+	exports, err := table.Find(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve existing exports: %w", err)
 	}
 
-	// partition out the exports that have been deleted!
+	// partition out the exports that no longer exist!
 	parts := collection.Partition(exports, func(s models.Export) bool {
-		_, err := os.Stat(s.Path)
-		return !errors.Is(err, fs.ErrNotExist)
+		exists, err := s.Exists()
+		if err == nil {
+			return exists
+		}
+
+		wdlog.Of(ctx).Error(
+			"unable to check if export exists, skipping pruning",
+			"error", err,
+			"pk", s.Pk,
+		)
+		return true
 	})
 
-	// go and delete them!
+	// delete the parts which no longer exist
 	if len(parts[false]) > 0 {
-		if err := table.Delete(parts[false]).Error; err != nil {
-			return nil, err
+		pks := collection.MapSlice(parts[false], func(s models.Export) uint { return s.Pk })
+		if _, err := table.Where("pk in ?", pks).Delete(ctx); err != nil {
+			return nil, fmt.Errorf("failed to remove old export entries: %w", err)
 		}
 	}
 
-	// return the ones that still exist
 	return parts[true], nil
 }
 
 // AddToExportLog adds the provided export to the log.
 func (log *Logger) Add(ctx context.Context, export models.Export) error {
-	// find the table
-	table, err := log.dependencies.SQL.QueryTable(ctx, log)
+	table, err := sql.OpenInterface[models.Export](ctx, log.dependencies.SQL, log)
 	if err != nil {
-		return fmt.Errorf("failed to query table: %w", err)
+		return fmt.Errorf("failed to open interface: %w", err)
 	}
 
-	// and save it!
-	res := table.Create(&export)
-	if res.Error != nil {
-		return res.Error
+	if err := table.Create(ctx, &export); err != nil {
+		return fmt.Errorf("failed to add log: %w", err)
 	}
 	return nil
 }

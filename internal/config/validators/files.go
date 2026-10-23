@@ -1,12 +1,12 @@
 //spellchecker:words validators
 package validators
 
-//spellchecker:words github errors pkglib
+//spellchecker:words pkglib
 import (
 	"fmt"
 	"io/fs"
 
-	"github.com/tkw1536/pkglib/fsx"
+	"go.tkw01536.de/pkglib/fsx"
 )
 
 func ValidateFile(path *string, dflt string) error {

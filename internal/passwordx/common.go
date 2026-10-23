@@ -1,11 +1,11 @@
 //spellchecker:words passwordx
 package passwordx
 
-//spellchecker:words embed github pkglib password
+//spellchecker:words embed pkglib password
 import (
 	"embed"
 
-	"github.com/tkw1536/pkglib/password"
+	"go.tkw01536.de/pkglib/password"
 )
 
 //go:embed common

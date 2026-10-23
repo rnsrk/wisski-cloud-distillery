@@ -5,16 +5,17 @@ package execx
 
 // TODO: Move this to an external package
 
-//spellchecker:words context exec path filepath github wisski distillery internal wdlog pkglib stream
+//spellchecker:words context errors exec path filepath time github wisski distillery internal wdlog pkglib stream
 import (
 	"context"
 	"errors"
 	"fmt"
 	"os/exec"
 	"path/filepath"
+	"time"
 
 	"github.com/FAU-CDI/wisski-distillery/internal/wdlog"
-	"github.com/tkw1536/pkglib/stream"
+	"go.tkw01536.de/pkglib/stream"
 )
 
 // CommandError is returned by Exec when a command could not be executed.
@@ -25,6 +26,7 @@ const CommandError = 127
 func CommandErrorFunc() int { return CommandError }
 
 // Exec executes a system command with the specified input/output streams, working directory, and arguments.
+// If the process is killed, and fails to exit, an internal amount of time is waited before it is closed.
 //
 // The command is started immediatly.
 // The returned function is guaranteed to be non-nil and returns an exit code.
@@ -33,7 +35,8 @@ func CommandErrorFunc() int { return CommandError }
 // If the command can not be executed, the returned function is [ExecCommandErrorFunc] and returns [ExecCommandError].
 func Exec(ctx context.Context, io stream.IOStream, workdir string, exe string, argv ...string) func() int {
 	// setup the command
-	cmd := exec.Command(exe, argv...)
+	cmd := exec.CommandContext(ctx, exe, argv...) // #nosec G204 -- intended
+	cmd.WaitDelay = time.Second
 	cmd.Dir = workdir
 	cmd.Stdin = io.Stdin
 	cmd.Stdout = io.Stdout
@@ -56,32 +59,8 @@ func Exec(ctx context.Context, io stream.IOStream, workdir string, exe string, a
 		return CommandErrorFunc
 	}
 
-	waitdone := make(chan struct{}) // closed once Wait() below returns
-	alldone := make(chan struct{})  // closed once the kill goroutine exits
-	go func() {
-		defer close(alldone)
-
-		select {
-		case <-ctx.Done():
-			err := cmd.Process.Kill()
-			wdlog.Of(ctx).Debug(
-				"exec.Command.Kill",
-				"exe", exe,
-				"argv", argv,
-				"error", err,
-			)
-		case <-waitdone:
-		}
-	}()
-
 	// create a new command
 	return func() int {
-		defer func() {
-			// wait for the goroutine to exit
-			close(waitdone)
-			<-alldone
-		}()
-
 		err := cmd.Wait()
 		wdlog.Of(ctx).Debug(
 			"exec.Command.Wait",

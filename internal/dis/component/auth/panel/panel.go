@@ -19,7 +19,7 @@ import (
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/ssh2/sshkeys"
 	"github.com/FAU-CDI/wisski-distillery/internal/models"
 	"github.com/julienschmidt/httprouter"
-	"github.com/tkw1536/pkglib/httpx/form"
+	"go.tkw01536.de/pkglib/httpx/form"
 )
 
 type UserPanel struct {
@@ -43,6 +43,8 @@ var (
 	_ component.Routeable = (*UserPanel)(nil)
 	_ component.Menuable  = (*UserPanel)(nil)
 )
+
+const maxBodyFormBytes = 1024 * 1024 // 1 MB
 
 func (panel *UserPanel) Routes() component.Routes {
 	return component.Routes{

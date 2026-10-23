@@ -1,7 +1,7 @@
 //spellchecker:words home
 package home
 
-//spellchecker:words context encoding json http strings github wisski distillery internal component
+//spellchecker:words context encoding json http strings github wisski distillery internal component pkglib errorsx
 import (
 	"context"
 	"encoding/json"
@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component"
-	"github.com/tkw1536/pkglib/errorsx"
+	"go.tkw01536.de/pkglib/errorsx"
 )
 
 func (home *Home) loadRedirect(context.Context) (redirect Redirect, e error) {

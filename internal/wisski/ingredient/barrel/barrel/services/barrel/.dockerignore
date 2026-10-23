@@ -1,0 +1,8 @@
+# Ignore everything
+*
+
+# allow the following files:
+!apache.d/*
+!etc/*
+!ssh/*
+!php.ini.d/*

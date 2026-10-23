@@ -1,16 +1,76 @@
 <?php
 
 use \Drupal\Core\Site\Settings;
+use \Drupal\Core\DependencyInjection\ContainerNotInitializedException;
 
 /** gets a setting from 'settings.php' */
 function get_setting($name) {
     return Settings::get($name);
 }
 
+function find_settings_php(): string {
+    try {
+       return DRUPAL_ROOT . "/" . \Drupal::getContainer()->getParameter("site.path") . "/settings.php";
+    } catch(ContainerNotInitializedException $t) {
+        // Fallback to sites/default/settings.php
+        return DRUPAL_ROOT . '/sites/default/settings.php';
+    }
+}
+
 /** sets a setting in 'settings.php' */
 function set_setting(string $name, mixed $value): bool {
+    $settings["settings"][$name] = (object)[
+        "value" => $value,
+        "required" => TRUE,
+    ];
+
+    return do_set_setting($settings);
+}
+
+/** sets the default database connection URL in settings.php */
+function set_default_db_connection(string $url): bool {
+    // Parse DB URL.
+    $parts = parse_url($url);
+    if ($parts === false) {
+        throw new Exception("Invalid database URL.");
+    }
+
+    $scheme = strtolower($parts['scheme'] ?? '');
+    if ($scheme !== 'mysql' && $scheme !== 'mariadb') {
+        throw new Exception("Unsupported scheme '{$scheme}'. Use mysql:// or mariadb://");
+    }
+
+    $database = ltrim($parts['path'] ?? '', '/');
+    if ($database === '') {
+        throw new Exception("Database name missing in URL path (e.g. /dbname).");
+    }
+
+    // Build Drupal DB array (mysql driver).
+    $db = [
+        'driver' => 'mysql',
+        'database' => $database,
+        'username' => $parts['user'] ?? '',
+        'password' => $parts['pass'] ?? '',
+        'host' => $parts['host'] ?? '127.0.0.1',
+        'port' => (string)($parts['port'] ?? '3306'),
+        'prefix' => '',
+        'namespace' => 'Drupal\\Core\\Database\\Driver\\mysql',
+    ];
+
+    // Prepare rewrite structure for SettingsEditor::rewrite().
+    // IMPORTANT: This targets $databases['default']['default'] in settings.php.
+    $settings = [];
+    $settings['databases']['default']['default'] = (object) [
+        'value' => $db,
+        'required' => true,
+    ];
+
+    return do_set_setting($settings);
+}
+
+function do_set_setting(array $settings): bool {
     // find settings.php
-    $filename = DRUPAL_ROOT . "/" . \Drupal::getContainer()->getParameter("site.path") . "/settings.php";
+    $filename = find_settings_php();
 
     // setup user write permissions for the file
     $old = fileperms($filename);
@@ -65,7 +125,7 @@ function set_trusted_domain(string $domain): bool {
 /** Sets up including a settings.php file from the given path */
 function install_settings_include(array $paths): bool {
     // find the original filename
-    $filename = DRUPAL_ROOT . "/" . \Drupal::getContainer()->getParameter("site.path") . "/settings.php";
+    $filename = find_settings_php();
     
     // read the original file
     $original_content = file_get_contents($filename);

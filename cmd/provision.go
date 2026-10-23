@@ -1,68 +1,93 @@
 package cmd
 
-//spellchecker:words encoding json github wisski distillery internal component provision models ingredient barrel manager logging goprogram exit
+//spellchecker:words encoding json github wisski distillery internal component provision models ingredient barrel manager logging cobra pkglib exit
 import (
 	"encoding/json"
 	"fmt"
 
-	wisski_distillery "github.com/FAU-CDI/wisski-distillery"
 	"github.com/FAU-CDI/wisski-distillery/internal/cli"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/provision"
 	"github.com/FAU-CDI/wisski-distillery/internal/models"
 	"github.com/FAU-CDI/wisski-distillery/internal/wisski/ingredient/barrel/manager"
 	"github.com/FAU-CDI/wisski-distillery/pkg/logging"
-	"github.com/tkw1536/goprogram/exit"
+	"github.com/spf13/cobra"
+	"go.tkw01536.de/pkglib/exit"
 )
 
-// Provision is the 'provision' command.
-var Provision wisski_distillery.Command = pv{}
+func NewProvisionCommand() *cobra.Command {
+	impl := new(pv)
 
-type pv struct {
-	PHPVersion            string `description:"specific php version to use for instance. See 'provision --list-php-versions' for available versions. " long:"php"                     short:"p"`
-	ListPHPVersions       bool   `description:"List available php versions"                                                                            long:"list-php-versions"`
-	IIPServer             bool   `description:"enable iip-server inside this instance"                                                                 long:"iip-server"              short:"i"`
-	PHPDevelopment        bool   `description:"Include php development configuration"                                                                  long:"php-devel"               short:"d"`
-	Flavor                string `description:"Use specific flavor. Use '--list-flavors' to list flavors. "                                            long:"flavor"                  short:"f"`
-	ListFlavors           bool   `description:"List all known flavors"                                                                                 long:"list-flavors"            short:"l"`
-	ContentSecurityPolicy string `description:"Setup ContentSecurityPolicy"                                                                            long:"content-security-policy" short:"c"`
-	Positionals           struct {
-		Slug string `description:"slug of instance to create" positional-arg-name:"slug"`
-	} `positional-args:"true"`
+	cmd := &cobra.Command{
+		Use:     "provision SLUG",
+		Short:   "creates a new instance",
+		Args:    cobra.ExactArgs(1),
+		PreRunE: impl.ParseArgs,
+		RunE:    impl.Exec,
+	}
+
+	// If you update these flags, don't forget to update info.go --reprovision!
+	flags := cmd.Flags()
+	flags.StringVar(&impl.PHPVersion, "php", "", "specific php version to use for instance. See 'provision --list-php-versions' for available versions.")
+	flags.BoolVar(&impl.ListPHPVersions, "list-php-versions", false, "List available php versions")
+	flags.BoolVar(&impl.IIPServer, "iip-server", false, "enable iip-server inside this instance")
+	flags.BoolVar(&impl.PHPDevelopment, "php-devel", false, "Include php development configuration")
+	flags.StringVar(&impl.Flavor, "flavor", "", "Use specific flavor. Use '--list-flavors' to list flavors.")
+	flags.BoolVar(&impl.ListFlavors, "list-flavors", false, "List all known flavors")
+	flags.StringVar(&impl.ContentSecurityPolicy, "content-security-policy", "", "Setup ContentSecurityPolicy")
+	flags.StringVar(&impl.IPAllowlist, "ip-allowlist", "", "Setup comman-separated IP (or IP block) allowlist")
+	flags.BoolVar(&impl.DedicatedSQL, "dedicated-sql", false, "Use a dedicated SQL server for this instance")
+	flags.BoolVar(&impl.DedicatedTriplestore, "dedicated-triplestore", false, "Use a dedicated Triplestore for this instance")
+	flags.BoolVar(&impl.SolrServer, "solr-server", false, "Add a dedicated Solr server to this instance")
+
+	return cmd
 }
 
-func (pv pv) AfterParse() error {
-	if !pv.ListFlavors && !pv.ListPHPVersions && pv.Positionals.Slug == "" {
+type pv struct {
+	PHPVersion            string
+	ListPHPVersions       bool
+	IIPServer             bool
+	PHPDevelopment        bool
+	Flavor                string
+	ListFlavors           bool
+	IPAllowlist           string
+	ContentSecurityPolicy string
+	DedicatedSQL          bool
+	DedicatedTriplestore  bool
+	SolrServer            bool
+	Positionals           struct {
+		Slug string
+	}
+}
+
+func (p *pv) ParseArgs(cmd *cobra.Command, args []string) error {
+	p.Positionals.Slug = args[0]
+
+	if !p.ListFlavors && !p.ListPHPVersions && p.Positionals.Slug == "" {
 		return errProvisionMissingSlug
 	}
 	return nil
 }
 
-func (pv) Description() wisski_distillery.Description {
-	return wisski_distillery.Description{
-		Requirements: cli.Requirements{
-			NeedsDistillery: true,
-		},
-		Command:     "provision",
-		Description: "creates a new instance",
-	}
-}
-
-var (
-	errProvisionMissingSlug = exit.NewErrorWithCode("must provide a slug", exit.ExitCommandArguments)
-	errProvisionGeneric     = exit.NewErrorWithCode("unable to provision instance", exit.ExitGeneric)
-)
+var errProvisionMissingSlug = exit.NewErrorWithCode("must provide a slug", cli.ExitCommandArguments)
 
 // TODO: AfterParse to check instance!
 
-func (p pv) Run(context wisski_distillery.Context) error {
-	if p.ListFlavors {
-		return p.listFlavors(context)
-	}
-	if p.ListPHPVersions {
-		return p.listPHPVersions(context)
+func (p *pv) Exec(cmd *cobra.Command, args []string) error {
+	dis, err := cli.GetDistillery(cmd, cli.Requirements{
+		NeedsDistillery: true,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to get distillery: %w", err)
 	}
 
-	instance, err := context.Environment.Provision().Provision(context.Stderr, context.Context, provision.Flags{
+	if p.ListFlavors {
+		return p.listFlavors(cmd)
+	}
+	if p.ListPHPVersions {
+		return p.listPHPVersions(cmd)
+	}
+
+	instance, err := dis.Provision().Provision(cmd.ErrOrStderr(), cmd.Context(), provision.Flags{
 		Slug:   p.Positionals.Slug,
 		Flavor: p.Flavor,
 		System: models.System{
@@ -70,6 +95,10 @@ func (p pv) Run(context wisski_distillery.Context) error {
 			IIPServer:             p.IIPServer,
 			PHPDevelopment:        p.PHPDevelopment,
 			ContentSecurityPolicy: p.ContentSecurityPolicy,
+			IPAllowlist:           p.IPAllowlist,
+			DedicatedSQL:          p.DedicatedSQL,
+			DedicatedTriplestore:  p.DedicatedTriplestore,
+			SolrServer:            p.SolrServer,
 		},
 	})
 	if err != nil {
@@ -77,18 +106,18 @@ func (p pv) Run(context wisski_distillery.Context) error {
 	}
 
 	// and we're done!
-	if _, err := logging.LogMessage(context.Stderr, "Instance has been provisioned"); err != nil {
+	if _, err := logging.LogMessage(cmd.ErrOrStderr(), "Instance has been provisioned"); err != nil {
 		return fmt.Errorf("failed to log message: %w", err)
 	}
-	_, _ = context.Printf("URL:      %s\n", instance.URL().String())
-	_, _ = context.Printf("Username: %s\n", instance.DrupalUsername)
-	_, _ = context.Printf("Password: %s\n", instance.DrupalPassword)
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "URL:      %s\n", instance.URL().String())
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Username: %s\n", instance.DrupalUsername)
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Password: %s\n", instance.DrupalPassword)
 
 	return nil
 }
 
-func (pv) listFlavors(context wisski_distillery.Context) error {
-	encoder := json.NewEncoder(context.Stdout)
+func (*pv) listFlavors(cmd *cobra.Command) error {
+	encoder := json.NewEncoder(cmd.OutOrStdout())
 	encoder.SetIndent("", "  ")
 	if err := encoder.Encode(manager.Profiles()); err != nil {
 		return fmt.Errorf("failed to encode flavors: %w", err)
@@ -96,14 +125,14 @@ func (pv) listFlavors(context wisski_distillery.Context) error {
 	return nil
 }
 
-func (pv) listPHPVersions(context wisski_distillery.Context) error {
+func (*pv) listPHPVersions(cmd *cobra.Command) error {
 	for _, v := range models.KnownPHPVersions() {
 		if v == models.DefaultPHPVersion {
-			if _, err := context.Printf("%s (default)\n", v); err != nil {
+			if _, err := fmt.Fprintf(cmd.OutOrStdout(), "%s (default)\n", v); err != nil {
 				return fmt.Errorf("failed to print message: %w", err)
 			}
 		} else {
-			if _, err := context.Println(v); err != nil {
+			if _, err := fmt.Fprintln(cmd.OutOrStdout(), v); err != nil {
 				return fmt.Errorf("failed to print message: %w", err)
 			}
 		}

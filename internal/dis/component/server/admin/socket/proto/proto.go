@@ -1,14 +1,14 @@
 //spellchecker:words proto
 package proto
 
-//spellchecker:words errors github wisski distillery internal component auth pkglib websocketx
+//spellchecker:words errors github wisski distillery internal component auth pkglib errorsx websocketx
 import (
 	"errors"
 	"fmt"
 
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/auth"
-	"github.com/tkw1536/pkglib/errorsx"
-	"github.com/tkw1536/pkglib/websocketx"
+	"go.tkw01536.de/pkglib/errorsx"
+	"go.tkw01536.de/pkglib/websocketx"
 )
 
 // ActionMap handles a set of WebSocket actions.

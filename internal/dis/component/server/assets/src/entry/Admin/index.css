@@ -1,29 +1,78 @@
-.wisski {
-    padding: 1em;
-}
-
-.wisski h3 {
-    padding: 0;
-}
-
-.wisski a.pure-button {
-    float: right;
-    position: relative;
-    bottom: 1em;
-}
-
 /* WissKI Status */
 
+.wisski-broken-message {
+    box-sizing: border-box;
+    background-color: #ff7a7a;
+    border: 0.5em solid red;
+    padding: 0.5em;
+}
+
 .wisski.running {
-    background-color: #9ADA07;
+    --wisski-status-color: #9ADA07;
+    --wisski-accent-color: green;
 }
 
 .wisski.stopped {
-    background-color: #ff7a7a;
+    --wisski-status-color: #ff7a7a;
+    --wisski-accent-color: red;
+}
+
+tr.wisski > td {
+    background-color: var(--wisski-status-color);
+}
+
+tr.wisski > td:first-child {
+    border-left: 0.5em solid var(--wisski-accent-color);
+}
+
+.wisski-broken-label {
+    color: red;
+    font-weight: bold;
+    background-color: white;
+    border: 1px solid var(--wisski-accent-color, red);
+    padding: 0 0.5em;
+    display: inline-block;
+}
+
+.instances-table .pure-button-group {
+    white-space: nowrap;
+}
+
+.instances-table.pure-table,
+.instances-table.pure-table-bordered {
+    border-color: #000;
+}
+
+.instances-table.pure-table td,
+.instances-table.pure-table th,
+.instances-table.pure-table-bordered td,
+.instances-table.pure-table-bordered th {
+    border-color: #000;
+}
+
+.instances-table th:first-child,
+.instances-table td:first-child {
+    min-width: 14em;
+    width: auto;
+}
+
+.instances-table thead th .pure-form input {
+    width: 100%;
+    min-width: 12em;
+    box-sizing: border-box;
+}
+
+.instances-table tr.filter-dimmed {
+    opacity: 0.4;
+    filter: grayscale(1) blur(1.5px);
+    pointer-events: none;
 }
 
 .disabled {
     color: gray;
+}
+.warning {
+    background-color: #FFE4B5;
 }
 
 .overflow {

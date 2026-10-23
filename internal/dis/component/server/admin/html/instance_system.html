@@ -16,7 +16,18 @@
                     Once set, the <code>slug</code> cannot be changed.
                 </span>
             </div>
-            
+
+            {{ if $rebuild }}
+            <div class="pure-control-group">
+                <label for="comment">Comment</label>
+                <textarea name="comment" id="comment" rows="3">{{ .Comment }}</textarea>
+                <span class="pure-form-message-inline">
+                    Optional free-text note for this instance.
+                    Visible on the instances list and overview.
+                </span>
+            </div>
+            {{ end }}
+
             <div class="pure-controls">
                 <h5>System Parameters</h5>
             </div>
@@ -37,6 +48,44 @@
                     Changing the PHP version is possible at any time.
                 </span>
             </div>
+
+            {{ if not $rebuild }}
+                <div class="pure-controls">
+                    <label for="dedicatedsql" class="pure-checkbox">
+                        <input type="checkbox" id="dedicatedsql" />
+                        Dedicated SQL Server
+                    </label>
+                    <span class="pure-form-message-inline">
+                        Use a dedicated SQL server for this instance, instead of the shared distillery SQL server.
+                        This cannot be changed after creation.
+                    </span>
+                </div>
+                <div class="pure-controls">
+                    <label for="dedicatedtriplestore" class="pure-checkbox">
+                        <input type="checkbox" id="dedicatedtriplestore" />
+                        Dedicated Triplestore
+                    </label>
+                    <span class="pure-form-message-inline">
+                        Use a dedicated Triplestore for this instance, instead of the shared distillery Triplestore.
+                        This cannot be changed after creation.
+                    </span>
+                </div>
+            {{ end }}
+
+            <div class="pure-controls">
+                <label for="solrserver" class="pure-checkbox">
+                    <input type="checkbox" id="solrserver" {{ if $rebuild }}{{ if .System.SolrServer }}checked{{end}}{{end}} />
+                    Solr Server
+                </label>
+                <span class="pure-form-message-inline">
+                    Add a Solr server with an empty core named <code>default</code> to this instance, available under <code>http://solr:8983</code> from inside the WissKI container.
+                    <small>
+                        This option does not configure WissKI to use the Solr server.
+                        It only makes it available for use.
+                    </small>
+                </span>
+            </div>
+
             <div class="pure-controls">
                 <label for="iipserver" class="pure-checkbox">
                     <input {{ if $rebuild }}{{ if .System.IIPServer }}checked{{end}}{{end}} type="checkbox" id="iipserver" />
@@ -84,7 +133,17 @@
                     Changing the header is possible at any time. 
                 </span>
             </div>
-        
+
+            <div class="pure-control-group">
+                <label for="ipallowlist">IP Allow List</label>
+                <input name="ipallowlist" id="ipallowlist" {{ if $rebuild }}value="{{ .System.IPAllowlist }}" {{ end }}>
+                <span class="pure-form-message-inline">
+                    Set a list of comma separated IP addresses or IP blocks that are allowed to access this instance.
+                    Leave blank to not set a list.
+                </span>
+            </div>
+
+
             {{ if not $rebuild }}
                 <div class="pure-controls">
                     <h5>Flavor</h5>

@@ -1,9 +1,9 @@
 //spellchecker:words validators
 package validators
 
-//spellchecker:words github pkglib validator
+//spellchecker:words pkglib validator
 import (
-	"github.com/tkw1536/pkglib/validator"
+	"go.tkw01536.de/pkglib/validator"
 )
 
 // New creates a new set of standard validators for the configuration.

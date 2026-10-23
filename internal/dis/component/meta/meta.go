@@ -1,9 +1,8 @@
 //spellchecker:words meta
 package meta
 
-//spellchecker:words reflect sync github wisski distillery internal component models
+//spellchecker:words sync github wisski distillery internal component models
 import (
-	"reflect"
 	"sync"
 
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component"
@@ -29,8 +28,7 @@ var (
 
 func (*Meta) TableInfo() component.TableInfo {
 	return component.TableInfo{
-		Model: reflect.TypeFor[models.Metadatum](),
-		Name:  models.MetadataTable,
+		Model: models.Metadatum{},
 	}
 }
 

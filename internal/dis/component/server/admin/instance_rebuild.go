@@ -1,7 +1,7 @@
 //spellchecker:words admin
 package admin
 
-//spellchecker:words context html template http github wisski distillery internal component instances server assets templating models julienschmidt httprouter pkglib httpx embed
+//spellchecker:words context errors html template http github wisski distillery internal component instances server assets templating models julienschmidt httprouter pkglib httpx embed
 import (
 	"context"
 	"errors"
@@ -17,7 +17,7 @@ import (
 	"github.com/FAU-CDI/wisski-distillery/internal/models"
 	"github.com/FAU-CDI/wisski-distillery/internal/wisski"
 	"github.com/julienschmidt/httprouter"
-	"github.com/tkw1536/pkglib/httpx"
+	"go.tkw01536.de/pkglib/httpx"
 
 	_ "embed"
 )
@@ -40,6 +40,7 @@ type instanceSystemContext struct {
 	// Are we in rebuild mode?
 	Rebuild bool
 	Slug    string
+	Comment string
 	System  models.System
 
 	// list of known profiles and their descriptions
@@ -83,15 +84,20 @@ func (admin *Admin) instanceRebuild(context.Context) http.Handler {
 		}
 
 		isc.Slug = instance.Slug
+		isc.Comment = instance.Comment
 		isc.System = instance.System
 
 		// replace the menu item
 		escapedSlug := url.PathEscape(instance.Slug)
+		presentFunc, presentErr := admin.preparePanelInstancePage(r, instance, "rebuild")
+		if presentErr != nil {
+			return isc, nil, presentErr
+		}
 		funcs = []templating.FlagFunc{
 			templating.ReplaceCrumb(menuInstance, component.MenuItem{Title: "Instance", Path: template.URL("/admin/instance/" + escapedSlug)}),            // #nosec G203 -- escaped and safe
 			templating.ReplaceCrumb(menuRebuild, component.MenuItem{Title: "Rebuild", Path: template.URL("/admin/instance/" + escapedSlug + "/rebuild")}), // #nosec G203 -- escaped and safe
 			templating.Title(instance.Slug + " - Rebuild"),
-			admin.instanceTabs(escapedSlug, "rebuild"),
+			presentFunc,
 		}
 
 		isc.prepare(true)

@@ -1,7 +1,7 @@
 //spellchecker:words instances
 package instances
 
-//spellchecker:words context errors path filepath github wisski distillery internal component instances malt models goprogram exit gorm clause
+//spellchecker:words context errors path filepath github wisski distillery internal component instances malt models gorm clause
 import (
 	"context"
 	"errors"
@@ -42,32 +42,29 @@ func (instances *Instances) use(wisski *wisski.WissKI) {
 }
 
 // WissKI returns the WissKI with the provided slug, if it exists.
-// It the WissKI does not exist, returns ErrWissKINotFound.
+// It the WissKI does not exist, returns an error wrapping [ErrWissKINotFound].
 func (instances *Instances) WissKI(ctx context.Context, slug string) (wissKI *wisski.WissKI, err error) {
 	if slug == "" {
 		return nil, ErrWissKINotFound
 	}
 
-	sql := instances.dependencies.SQL
-	if err := sql.WaitQueryTable(ctx); err != nil {
+	if err := instances.dependencies.SQL.Wait(ctx); err != nil {
 		return nil, fmt.Errorf("failed to wait for database: %w", err)
 	}
 
-	table, err := sql.QueryTable(ctx, instances.dependencies.InstanceTable)
+	table, err := sql.OpenInterface[models.Instance](ctx, instances.dependencies.SQL, instances.dependencies.InstanceTable)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query table: %w", err)
+		return nil, fmt.Errorf("failed to open interface: %w", err)
 	}
 
-	// create a struct
 	wissKI = new(wisski.WissKI)
 
-	// find the instance by slug
-	query := table.Find(&wissKI.Instance, &models.Instance{Slug: slug})
-	switch {
-	case query.Error != nil:
-		return nil, fmt.Errorf("failed to find instance: %w", query.Error)
-	case query.RowsAffected == 0:
-		return nil, ErrWissKINotFound
+	wissKI.Instance, err = table.Where("slug = ?", slug).First(ctx)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, fmt.Errorf("%w: %w", ErrWissKINotFound, err)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to find instance: %w", err)
 	}
 
 	// use the wissKI instance
@@ -89,11 +86,11 @@ func (instances *Instances) Instance(ctx context.Context, instance models.Instan
 // It does not perform any checks on the WissKI itself.
 func (instances *Instances) Has(ctx context.Context, slug string) (ok bool, err error) {
 	sql := instances.dependencies.SQL
-	if err := sql.WaitQueryTable(ctx); err != nil {
+	if err := sql.Wait(ctx); err != nil {
 		return false, fmt.Errorf("failed to wait for database: %w", err)
 	}
 
-	table, err := sql.QueryTable(ctx, instances.dependencies.InstanceTable)
+	table, err := sql.OpenTable(ctx, instances.dependencies.InstanceTable)
 	if err != nil {
 		return false, fmt.Errorf("failed to query table: %w", err)
 	}
@@ -133,12 +130,12 @@ func (instances *Instances) Load(ctx context.Context, slugs ...string) ([]*wissk
 // find finds instances based on the provided query.
 func (instances *Instances) find(ctx context.Context, order bool, query func(table *gorm.DB) *gorm.DB) (results []*wisski.WissKI, err error) {
 	sql := instances.dependencies.SQL
-	if err := sql.WaitQueryTable(ctx); err != nil {
+	if err := sql.Wait(ctx); err != nil {
 		return nil, fmt.Errorf("failed to wait for query table: %w", err)
 	}
 
 	// open the bookkeeping table
-	table, err := sql.QueryTable(ctx, instances.dependencies.InstanceTable)
+	table, err := sql.OpenTable(ctx, instances.dependencies.InstanceTable)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query table: %w", err)
 	}

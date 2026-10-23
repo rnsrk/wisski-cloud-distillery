@@ -1,7 +1,7 @@
 services:
   barrel:
     build:
-      context: barrel
+      context: services/barrel
       args:
         BARREL_BASE_IMAGE: ${BARREL_BASE_IMAGE}
         PHP_CONFIG_MODE: ${PHP_CONFIG_MODE}
@@ -14,7 +14,6 @@ services:
     restart: always
     hostname: ${WISSKI_HOSTNAME}
 
-    # label it with the current slug
     labels:
       - "traefik.enable=True"
       - "eu.wiss-ki.barrel.distillery=${DOCKER_NETWORK_NAME}"
@@ -22,19 +21,10 @@ services:
       - "traefik.http.routers.wisski_${SLUG}.rule=${HOST_RULE}"
       - "traefik.http.routers.wisski_${SLUG}.tls=${HTTPS_ENABLED}"
       - "traefik.http.routers.wisski_${SLUG}.tls.certresolver=distillery"
-      - "traefik.http.routers.wisski_${SLUG}.middlewares=wisski_${SLUG}_hmid@docker"
-
       - "traefik.http.services.wisski_${SLUG}.loadbalancer.server.port=8080"
+      # more stuff added dynamically ...
 
-      # Remove all of the custom headers that display which server powers us.
-      # Only hackers need to know this.
-      - "traefik.http.middlewares.wisski_${SLUG}_hmid.headers.customresponseheaders.x-drupal-cache="
-      - "traefik.http.middlewares.wisski_${SLUG}_hmid.headers.customresponseheaders.x-drupal-dynamic-cache="
-      - "traefik.http.middlewares.wisski_${SLUG}_hmid.headers.customresponseheaders.x-generator="
-      - "traefik.http.middlewares.wisski_${SLUG}_hmid.headers.customresponseheaders.x-powered-by="
-      - "traefik.http.middlewares.wisski_${SLUG}_hmid.headers.customresponseheaders.Server="
     
-    # volumes that are mounted
     volumes:
       - ${RUNTIME_DIR}:/runtime:ro
       - ${DATA_PATH}/.composer:/var/www/.composer:rw
@@ -43,8 +33,78 @@ services:
       - ${DATA_PATH}/hostkeys:/ssh/hostkeys:rw
       - ${LOCAL_SETTINGS_PATH}:${LOCAL_SETTINGS_MOUNT}:ro
       - ${PHP_INI_PATH}:${PHP_INI_MOUNT}:ro
+    
+    networks:
+      - distillery
+      - default
+ 
+    depends_on:
+      # dynamic update based on configuration
+      - dedicatedsql
+      - dedicatedtriplestore
+      - solr
+
+  solr:
+    # solr service, removed when not needed
+    image: docker.io/library/solr:9.10
+    restart: always
+    cpus: 1.0
+    environment:
+      - SOLR_HOST=solr
+      - SOLR_HEAP=1g
+      - SOLR_MODULES=extraction,langid,ltr,analysis-extras
+    volumes:
+      - ${SOLR_PATH}/data:/var/solr:rw
+      - ${SOLR_PATH}/config:/solr_config/conf
+    networks:
+      - default
+
+  dedicatedsql:
+    # dedicated sql server, removed when not needed
+    image: mariadb:11.8
+    restart: always
+    cpus: 1.0
+    volumes:
+        - "${SQL_PATH}/data:/var/lib/mysql"
+        - "${SQL_PATH}/config/conf.d/:/etc/mysql/conf.d:ro"
+        - "${SQL_PATH}/imports/:/imports/"
+    environment:
+        # This combination of environment variables will configure a passwordless root user
+        # that can only connect to the container from 'localhost'.
+        # This means we can only connect using 'docker-compose exec sql mysql -C '...' '. 
+        - "MYSQL_ALLOW_EMPTY_PASSWORD=yes"
+        - "MYSQL_ROOT_HOST=localhost"
+    networks:
+      - default
+
+  dedicatedtriplestore:
+    build:
+      # dedicated triplestore, removed when not needed
+      context: services/triplestore
+      args:
+        RDF4J_VERSION: 5.2.2-tomcat
+    restart: always
+    cpus: 1.0
+    mem_limit: 4g
+    environment:
+      RDF4J_REPOSITORY: ""
+      JAVA_OPTS: "-Xms1g -Xmx4g -XX:+UseContainerSupport"
+    volumes:
+      - ${TS_PATH}/data:/var/rdf4j:rw
+      - ${TS_PATH}/logs:/var/rdf4j/server/logs:rw
+    networks:
+      - default 
+    healthcheck:
+      test: ["CMD", "/bin/bash", "/healthcheck.sh"]
+      start_period: 1m
+      start_interval: 10s
+      interval: 1m
+      timeout: 5s
+      retries: 3
 
 networks:
   default:
+  distillery:
     name: ${DOCKER_NETWORK_NAME}
     external: true
+

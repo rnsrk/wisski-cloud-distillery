@@ -1,7 +1,7 @@
 //spellchecker:words exporter
 package exporter
 
-//spellchecker:words context errors slog path filepath strings time github wisski distillery internal component wdlog logging pkglib umaskfree status golang slices
+//spellchecker:words context slog path filepath slices strings time github wisski distillery internal component wdlog logging pkglib errorsx umaskfree status
 import (
 	"context"
 	"fmt"
@@ -17,9 +17,9 @@ import (
 	"github.com/FAU-CDI/wisski-distillery/internal/wisski"
 
 	"github.com/FAU-CDI/wisski-distillery/pkg/logging"
-	"github.com/tkw1536/pkglib/errorsx"
-	"github.com/tkw1536/pkglib/fsx/umaskfree"
-	"github.com/tkw1536/pkglib/status"
+	"go.tkw01536.de/pkglib/errorsx"
+	"go.tkw01536.de/pkglib/fsx/umaskfree"
+	"go.tkw01536.de/pkglib/status"
 )
 
 // Backup describes a backup.

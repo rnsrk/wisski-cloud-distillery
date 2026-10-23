@@ -1,7 +1,7 @@
 //spellchecker:words validators
 package validators
 
-//spellchecker:words regexp github errors
+//spellchecker:words regexp errors
 import (
 	"fmt"
 	"regexp"
@@ -9,7 +9,7 @@ import (
 	"errors"
 )
 
-var regexpEmail = regexp.MustCompile(`^([-a-zA-Z0-9]+)\@([a-zA-Z0-9][-a-zA-Z0-9]*\.)*[a-zA-Z0-9][-a-zA-Z0-9]*$`) // TODO: Make this regexp nicer!
+var regexpEmail = regexp.MustCompile(`^([-a-zA-Z0-9\.]+)\@([a-zA-Z0-9][-a-zA-Z0-9]*\.)*[a-zA-Z0-9][-a-zA-Z0-9]*$`) // TODO: Make this regexp nicer!
 
 var errNotAValidEmail = errors.New("not a valid email")
 

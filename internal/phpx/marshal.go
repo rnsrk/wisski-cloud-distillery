@@ -1,7 +1,7 @@
 //spellchecker:words phpx
 package phpx
 
-//spellchecker:words encoding json math strconv strings github pkglib collection
+//spellchecker:words encoding json math strconv strings pkglib collection
 import (
 	"encoding/json"
 	"fmt"
@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/tkw1536/pkglib/collection"
+	"go.tkw01536.de/pkglib/collection"
 )
 
 // Marshal marshals data as a PHP expression, so that it can be safely used inside a php expession.

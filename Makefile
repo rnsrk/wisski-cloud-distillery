@@ -1,17 +1,14 @@
 .PHONY: clean all deps live tslint tsfix lint
 
-live:
-	sudo CGO_ENABLED=0 go run -trimpath ./cmd/wdcli $(ARGS)
-
 all: wdcli
 
 lint:
 	go vet ./...
-	go tool govulncheck ./...
 	go tool golangci-lint run ./...
+	go tool govulncheck ./...
 
 wdcli:
-	go generate ./internal/dis/component/control/static/
+	go generate ./internal/dis/component/server/assets/
 	CGO_ENABLED=0 go build -trimpath -o ./wdcli ./cmd/wdcli
 
 tslint:

@@ -1,7 +1,7 @@
 //spellchecker:words info
 package info
 
-//spellchecker:words context reflect sync atomic time github wisski distillery internal phpx status wdlog ingredient pkglib sema golang errgroup
+//spellchecker:words context slog reflect sync atomic time github wisski distillery internal phpx status wdlog ingredient pkglib sema golang errgroup
 import (
 	"context"
 	"fmt"
@@ -15,7 +15,7 @@ import (
 	"github.com/FAU-CDI/wisski-distillery/internal/wdlog"
 	"github.com/FAU-CDI/wisski-distillery/internal/wisski/ingredient"
 	"github.com/FAU-CDI/wisski-distillery/internal/wisski/ingredient/php"
-	"github.com/tkw1536/pkglib/sema"
+	"go.tkw01536.de/pkglib/sema"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -38,6 +38,8 @@ func (nfo *Info) Information(ctx context.Context, quick bool) (info status.WissK
 		Quick:   quick,
 		Context: ctx,
 	}
+
+	info.Instance = ingredient.GetLiquid(nfo).Instance
 
 	var serversUsed uint64
 	pool := sema.Pool[*phpx.Server]{
@@ -109,6 +111,11 @@ func (nfo *Info) Information(ctx context.Context, quick bool) (info status.WissK
 	for i, fetcher := range nfo.dependencies.Fetchers {
 		tookSum += fetcherTimes[i]
 		times[fetcher.Name()] = fetcherTimes[i]
+	}
+
+	// record any error that occurred
+	if err != nil {
+		info.Error = err
 	}
 
 	// compute the ratio taken

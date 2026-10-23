@@ -10,7 +10,7 @@ import (
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/auth/scopes"
 	"github.com/FAU-CDI/wisski-distillery/internal/wisski"
-	"github.com/tkw1536/pkglib/stream"
+	"go.tkw01536.de/pkglib/stream"
 )
 
 // installing additional javascript libraries
@@ -34,7 +34,7 @@ func (*InstallColorboxJS) Action() InstanceAction {
 }
 
 func (*InstallColorboxJS) Act(ctx context.Context, instance *wisski.WissKI, in io.Reader, out io.Writer, params ...string) (any, error) {
-	if err := instance.Barrel().Shell(ctx, stream.NewIOStream(out, out, nil), "/runtime/install_colorbox.sh"); err != nil {
+	if err := instance.Barrel().BashScript(ctx, stream.NewIOStream(out, out, nil), "/bin/bash", "/runtime/install_colorbox.sh"); err != nil {
 		return nil, fmt.Errorf("failed to install colorbox: %w", err)
 	}
 	return nil, nil
@@ -59,7 +59,7 @@ func (*InstallDompurifyJS) Action() InstanceAction {
 }
 
 func (*InstallDompurifyJS) Act(ctx context.Context, instance *wisski.WissKI, in io.Reader, out io.Writer, params ...string) (any, error) {
-	if err := instance.Barrel().Shell(ctx, stream.NewIOStream(out, out, nil), "/runtime/install_dompurify.sh"); err != nil {
+	if err := instance.Barrel().BashScript(ctx, stream.NewIOStream(out, out, nil), "/bin/bash", "/runtime/install_dompurify.sh"); err != nil {
 		return nil, fmt.Errorf("failed to install dompurify: %w", err)
 	}
 	return nil, nil
@@ -84,7 +84,10 @@ func (*InstallMiradorJS) Action() InstanceAction {
 }
 
 func (*InstallMiradorJS) Act(ctx context.Context, instance *wisski.WissKI, in io.Reader, out io.Writer, params ...string) (any, error) {
-	return nil, instance.Barrel().Shell(ctx, stream.NewIOStream(out, out, nil), "/runtime/install_mirador.sh")
+	if err := instance.Barrel().BashScript(ctx, stream.NewIOStream(out, out, nil), "/bin/bash", "/runtime/install_mirador.sh"); err != nil {
+		return nil, fmt.Errorf("failed to install mirador: %w", err)
+	}
+	return nil, nil
 }
 
 type InstallIIPMooViewerJS struct {
@@ -106,5 +109,8 @@ func (*InstallIIPMooViewerJS) Action() InstanceAction {
 }
 
 func (*InstallIIPMooViewerJS) Act(ctx context.Context, instance *wisski.WissKI, in io.Reader, out io.Writer, params ...string) (any, error) {
-	return nil, instance.Barrel().Shell(ctx, stream.NewIOStream(out, out, nil), "/runtime/install_iipmooviewer.sh")
+	if err := instance.Barrel().BashScript(ctx, stream.NewIOStream(out, out, nil), "/bin/bash", "/runtime/install_iipmooviewer.sh"); err != nil {
+		return nil, fmt.Errorf("failed to install iipmooviewer: %w", err)
+	}
+	return nil, nil
 }

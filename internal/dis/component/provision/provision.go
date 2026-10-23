@@ -1,7 +1,7 @@
 //spellchecker:words provision
 package provision
 
-//spellchecker:words context errors github wisski distillery internal component instances models ingredient barrel manager logging pkglib
+//spellchecker:words context errors github wisski distillery internal component instances models ingredient barrel manager logging pkglib errorsx
 import (
 	"context"
 	"errors"
@@ -14,7 +14,8 @@ import (
 	"github.com/FAU-CDI/wisski-distillery/internal/wisski"
 	"github.com/FAU-CDI/wisski-distillery/internal/wisski/ingredient/barrel/manager"
 	"github.com/FAU-CDI/wisski-distillery/pkg/logging"
-	"github.com/tkw1536/pkglib/fsx"
+	"go.tkw01536.de/pkglib/errorsx"
+	"go.tkw01536.de/pkglib/fsx"
 )
 
 type Provision struct {
@@ -73,7 +74,7 @@ func (pv *Provision) validate(flags Flags) error {
 }
 
 // Provision provisions a new docker compose instance.
-func (pv *Provision) Provision(progress io.Writer, ctx context.Context, flags Flags) (*wisski.WissKI, error) {
+func (pv *Provision) Provision(progress io.Writer, ctx context.Context, flags Flags) (w *wisski.WissKI, e error) {
 	// validate that everything is correct
 	if err := pv.validate(flags); err != nil {
 		return nil, fmt.Errorf("failed to validate flags: %w", err)
@@ -83,12 +84,17 @@ func (pv *Provision) Provision(progress io.Writer, ctx context.Context, flags Fl
 	if _, err := logging.LogMessage(progress, "Provisioning new WissKI instance %s", flags.Slug); err != nil {
 		return nil, fmt.Errorf("failed to log message: %w", err)
 	}
-	if exists, err := pv.dependencies.Instances.Has(ctx, flags.Slug); err != nil || exists {
+
+	exists, err := pv.dependencies.Instances.Has(ctx, flags.Slug)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check if instance exists: %w", err)
+	}
+	if exists {
 		return nil, ErrInstanceAlreadyExists
 	}
 
 	// log out what we're doing!
-	if _, err := fmt.Fprintf(progress, "%#v", flags); err != nil {
+	if _, err := fmt.Fprintf(progress, "%#v\n", flags); err != nil {
 		return nil, fmt.Errorf("failed to report progress: %w", err)
 	}
 
@@ -123,14 +129,19 @@ func (pv *Provision) Provision(progress io.Writer, ctx context.Context, flags Fl
 		return nil, fmt.Errorf("failed to update bookkeeping database: %w", err)
 	}
 
-	// create all the resources!
+	// Create all the resources we can create without a stack.
+	var lateProvisionables []component.Provisionable
 	if err := logging.LogOperation(func() error {
 		domain := instance.Domain()
 		for _, pc := range pv.dependencies.Provisionable {
+			if pc.ProvisionNeedsStack(instance.Instance) {
+				lateProvisionables = append(lateProvisionables, pc)
+				continue
+			}
 			if _, err := logging.LogMessage(progress, "Provisioning %s resources", pc.Name()); err != nil {
 				return fmt.Errorf("failed to log message: %w", err)
 			}
-			err := pc.Provision(ctx, instance.Instance, domain)
+			err := pc.Provision(ctx, progress, instance.Instance, domain, nil)
 			if err != nil {
 				return fmt.Errorf("failed to provision instance: %w", err)
 			}
@@ -143,7 +154,7 @@ func (pv *Provision) Provision(progress io.Writer, ctx context.Context, flags Fl
 
 	// run the provision script
 	if err := logging.LogOperation(func() error {
-		return instance.Manager().Provision(ctx, progress, flags.System, flags.Profile())
+		return instance.Manager().Provision(ctx, progress, flags.System, flags.Profile(), lateProvisionables)
 	}, progress, "Running setup scripts"); err != nil {
 		return nil, fmt.Errorf("failed to run setup scripts: %w", err)
 	}
@@ -152,7 +163,13 @@ func (pv *Provision) Provision(progress io.Writer, ctx context.Context, flags Fl
 	if _, err := logging.LogMessage(progress, "Starting Container"); err != nil {
 		return nil, fmt.Errorf("failed to log message: %w", err)
 	}
-	if err := instance.Barrel().Stack().Up(ctx, progress); err != nil {
+	stack, err := instance.Barrel().OpenStack()
+	if err != nil {
+		return nil, fmt.Errorf("failed to open stack: %w", err)
+	}
+	defer errorsx.Close(stack, &e, "stack")
+
+	if err := stack.Start(ctx, progress); err != nil {
 		return nil, fmt.Errorf("failed to restart container: %w", err)
 	}
 

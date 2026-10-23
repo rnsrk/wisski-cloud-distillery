@@ -1,14 +1,14 @@
 //spellchecker:words exporter
 package exporter
 
-//spellchecker:words encoding json strings github pkglib sequence
+//spellchecker:words encoding json strings pkglib sequence
 import (
 	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
 
-	"github.com/tkw1536/pkglib/sequence"
+	"go.tkw01536.de/pkglib/sequence"
 )
 
 func (snapshot Snapshot) String() string {

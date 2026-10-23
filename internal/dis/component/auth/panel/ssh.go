@@ -16,9 +16,9 @@ import (
 	"github.com/FAU-CDI/wisski-distillery/internal/models"
 	"github.com/FAU-CDI/wisski-distillery/internal/wdlog"
 	"github.com/gliderlabs/ssh"
-	"github.com/tkw1536/pkglib/httpx"
-	"github.com/tkw1536/pkglib/httpx/form"
-	"github.com/tkw1536/pkglib/httpx/form/field"
+	"go.tkw01536.de/pkglib/httpx"
+	"go.tkw01536.de/pkglib/httpx/form"
+	"go.tkw01536.de/pkglib/httpx/form/field"
 
 	gossh "golang.org/x/crypto/ssh"
 
@@ -103,6 +103,7 @@ var (
 func (panel *UserPanel) sshDeleteRoute(ctx context.Context) http.Handler {
 	logger := wdlog.Of(ctx)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Body = http.MaxBytesReader(w, r.Body, maxBodyFormBytes)
 		if err := r.ParseForm(); err != nil {
 			logger.Error(
 				"failed to parse form",

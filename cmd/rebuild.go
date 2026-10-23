@@ -1,39 +1,62 @@
 package cmd
 
-//spellchecker:words github wisski distillery internal models goprogram exit pkglib status
+//spellchecker:words github wisski distillery internal models cobra pkglib exit status
 import (
 	"fmt"
 	"io"
 
-	wisski_distillery "github.com/FAU-CDI/wisski-distillery"
 	"github.com/FAU-CDI/wisski-distillery/internal/cli"
 	"github.com/FAU-CDI/wisski-distillery/internal/models"
 	"github.com/FAU-CDI/wisski-distillery/internal/wisski"
-	"github.com/tkw1536/goprogram/exit"
-	"github.com/tkw1536/pkglib/status"
+	"github.com/spf13/cobra"
+	"go.tkw01536.de/pkglib/exit"
+	"go.tkw01536.de/pkglib/status"
 )
 
-// Cron is the 'cron' command.
-var Rebuild wisski_distillery.Command = rebuild{}
+func NewRebuildCommand() *cobra.Command {
+	impl := new(rebuild)
 
-type rebuild struct {
-	Parallel int `default:"1" description:"run on (at most) this many instances in parallel. 0 for no limit." long:"parallel" short:"a"`
+	cmd := &cobra.Command{
+		Use:     "rebuild SLUG...",
+		Short:   "runs the rebuild script for several instances",
+		Args:    cobra.ArbitraryArgs,
+		PreRunE: impl.ParseArgs,
+		RunE:    impl.Exec,
+	}
 
-	System                bool   `description:"Update the system configuration according to other flags"                                                         long:"system-update"           short:"s"`
-	PHPVersion            string `description:"update to specific php version to use for instance. See 'provision --list-php-versions' for available versions. " long:"php"                     short:"p"`
-	IIPServer             bool   `description:"enable iip-server inside this instance"                                                                           long:"iip-server"              short:"i"`
-	PHPDevelopment        bool   `description:"Include php development configuration"                                                                            long:"php-devel"               short:"d"`
-	Flavor                string `description:"Use specific flavor. Use 'provision --list-flavors' to list flavors. "                                            long:"flavor"                  short:"f"`
-	ContentSecurityPolicy string `description:"Setup ContentSecurityPolicy"                                                                                      long:"content-security-policy" short:"c"`
-
-	Positionals struct {
-		Slug []string `description:"slug of instance or instances to run rebuild" positional-arg-name:"SLUG" required:"0"`
-	} `positional-args:"true"`
+	flags := cmd.Flags()
+	flags.IntVar(&impl.Parallel, "parallel", 1, "run on (at most) this many instances in parallel. 0 for no limit.")
+	flags.BoolVar(&impl.System, "system-update", false, "Update the system configuration according to other flags")
+	flags.StringVar(&impl.PHPVersion, "php", "", "update to specific php version to use for instance. See 'provision --list-php-versions' for available versions.")
+	flags.BoolVar(&impl.IIPServer, "iip-server", false, "enable iip-server inside this instance")
+	flags.BoolVar(&impl.PHPDevelopment, "php-devel", false, "Include php development configuration")
+	flags.StringVar(&impl.Flavor, "flavor", "", "Use specific flavor. Use 'provision --list-flavors' to list flavors.")
+	flags.StringVar(&impl.ContentSecurityPolicy, "content-security-policy", "", "Setup ContentSecurityPolicy")
+	flags.StringVar(&impl.IPAllowlist, "ip-allowlist", "", "Setup comman-separated IP (or IP block) allowlist")
+	flags.BoolVar(&impl.SolrServer, "solr-server", false, "Add a Solr server to this instance")
+	return cmd
 }
 
-var errRebuildNoSystem = exit.NewErrorWithCode("flags for system reconfiguration have been set, but `--system' was not provided", exit.ExitCommandArguments)
+type rebuild struct {
+	Parallel int
 
-func (rb rebuild) AfterParse() error {
+	System                bool
+	PHPVersion            string
+	IIPServer             bool
+	PHPDevelopment        bool
+	Flavor                string
+	ContentSecurityPolicy string
+	IPAllowlist           string
+	SolrServer            bool
+
+	Positionals struct {
+		Slug []string
+	}
+}
+
+func (rb *rebuild) ParseArgs(cmd *cobra.Command, args []string) error {
+	rb.Positionals.Slug = args
+
 	if rb.System {
 		return nil
 	}
@@ -43,29 +66,25 @@ func (rb rebuild) AfterParse() error {
 	return nil
 }
 
-func (rebuild) Description() wisski_distillery.Description {
-	return wisski_distillery.Description{
-		Requirements: cli.Requirements{
-			NeedsDistillery: true,
-		},
-		Command:     "rebuild",
-		Description: "runs the rebuild script for several instances",
+var errRebuildNoSystem = exit.NewErrorWithCode("flags for system reconfiguration have been set, but `--system' was not provided", cli.ExitCommandArguments)
+var errRebuildFailed = exit.NewErrorWithCode("failed to run rebuild", cli.ExitGeneric)
+
+func (rb *rebuild) Exec(cmd *cobra.Command, args []string) (err error) {
+	dis, err := cli.GetDistillery(cmd, cli.Requirements{
+		NeedsDistillery: true,
+	})
+	if err != nil {
+		return fmt.Errorf("%w: failed to get instances: %w", errRebuildFailed, err)
 	}
-}
-
-var errRebuildFailed = exit.NewErrorWithCode("failed to run rebuild", exit.ExitGeneric)
-
-func (rb rebuild) Run(context wisski_distillery.Context) (err error) {
-	dis := context.Environment
 
 	// find the instances
-	wissKIs, err := dis.Instances().Load(context.Context, rb.Positionals.Slug...)
+	wissKIs, err := dis.Instances().Load(cmd.Context(), rb.Positionals.Slug...)
 	if err != nil {
 		return fmt.Errorf("%w: failed to get instances: %w", errRebuildFailed, err)
 	}
 
 	// and do the actual rebuild
-	if err := status.WriterGroup(context.Stderr, rb.Parallel, func(instance *wisski.WissKI, writer io.Writer) error {
+	if err := status.WriterGroup(cmd.ErrOrStderr(), rb.Parallel, func(instance *wisski.WissKI, writer io.Writer) error {
 		sys := instance.System
 		if rb.System {
 			sys = models.System{
@@ -73,10 +92,12 @@ func (rb rebuild) Run(context wisski_distillery.Context) (err error) {
 				IIPServer:             rb.IIPServer,
 				PHPDevelopment:        rb.PHPDevelopment,
 				ContentSecurityPolicy: rb.ContentSecurityPolicy,
+				IPAllowlist:           rb.IPAllowlist,
+				SolrServer:            rb.SolrServer,
 			}
 		}
 
-		return instance.SystemManager().Apply(context.Context, writer, sys)
+		return instance.SystemManager().Apply(cmd.Context(), writer, sys)
 	}, wissKIs, status.SmartMessage(func(item *wisski.WissKI) string {
 		return fmt.Sprintf("rebuild %q", item.Slug)
 	})); err != nil {

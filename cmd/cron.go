@@ -1,50 +1,66 @@
 package cmd
 
-//spellchecker:words github wisski distillery internal goprogram exit pkglib status
+//spellchecker:words github wisski distillery internal cobra pkglib exit status
 import (
 	"fmt"
 	"io"
 
-	wisski_distillery "github.com/FAU-CDI/wisski-distillery"
 	"github.com/FAU-CDI/wisski-distillery/internal/cli"
 	"github.com/FAU-CDI/wisski-distillery/internal/wisski"
-	"github.com/tkw1536/goprogram/exit"
-	"github.com/tkw1536/pkglib/status"
+	"github.com/spf13/cobra"
+	"go.tkw01536.de/pkglib/exit"
+	"go.tkw01536.de/pkglib/status"
 )
 
-// Cron is the 'cron' command.
-var Cron wisski_distillery.Command = cron{}
+func NewCronCommand() *cobra.Command {
+	impl := new(cron)
 
-type cron struct {
-	Parallel int `default:"1" description:"run on (at most) this many instances in parallel. 0 for no limit." long:"parallel" short:"p"`
+	cmd := &cobra.Command{
+		Use:     "cron SLUG...",
+		Short:   "runs the cron script for several instances",
+		Args:    cobra.ArbitraryArgs,
+		PreRunE: impl.ParseArgs,
+		RunE:    impl.Exec,
+	}
 
-	Positionals struct {
-		Slug []string `description:"slug of instances to run cron in" positional-arg-name:"SLUG" required:"0"`
-	} `positional-args:"true"`
+	flags := cmd.Flags()
+	flags.IntVar(&impl.Parallel, "parallel", 1, "run on (at most) this many instances in parallel. 0 for no limit.")
+
+	return cmd
 }
 
-func (cron) Description() wisski_distillery.Description {
-	return wisski_distillery.Description{
-		Requirements: cli.Requirements{
-			NeedsDistillery: true,
-		},
-		Command:     "cron",
-		Description: "runs the cron script for several instances",
+type cron struct {
+	Parallel    int
+	Positionals struct {
+		Slug []string
 	}
 }
 
-var errCronFailed = exit.NewErrorWithCode("failed to run cron", exit.ExitGeneric)
+func (cr *cron) ParseArgs(cmd *cobra.Command, args []string) error {
+	cr.Positionals.Slug = args
+	return nil
+}
 
-func (cr cron) Run(context wisski_distillery.Context) (err error) {
+var errCronFailed = exit.NewErrorWithCode("failed to run cron", cli.ExitGeneric)
+
+func (cr *cron) Exec(cmd *cobra.Command, args []string) error {
+	dis, err := cli.GetDistillery(cmd, cli.Requirements{
+		NeedsDistillery: true,
+	})
+
+	if err != nil {
+		return fmt.Errorf("%w: %w", errCronFailed, err)
+	}
+
 	// find all the instances!
-	wissKIs, err := context.Environment.Instances().Load(context.Context, cr.Positionals.Slug...)
+	wissKIs, err := dis.Instances().Load(cmd.Context(), cr.Positionals.Slug...)
 	if err != nil {
 		return fmt.Errorf("%w: failed to load instances: %w", errCronFailed, err)
 	}
 
 	// and do the actual blind_update!
-	if err := status.WriterGroup(context.Stderr, cr.Parallel, func(instance *wisski.WissKI, writer io.Writer) error {
-		return instance.Drush().Cron(context.Context, writer)
+	if err := status.WriterGroup(cmd.ErrOrStderr(), cr.Parallel, func(instance *wisski.WissKI, writer io.Writer) error {
+		return instance.Drush().Cron(cmd.Context(), writer)
 	}, wissKIs, status.SmartMessage(func(item *wisski.WissKI) string {
 		return fmt.Sprintf("cron %q", item.Slug)
 	})); err != nil {

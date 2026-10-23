@@ -1,55 +1,70 @@
 package cmd
 
-//spellchecker:words github wisski distillery internal goprogram exit parser
+//spellchecker:words strings github wisski distillery internal cobra pkglib exit nobufio
 import (
 	"fmt"
+	"strings"
 
-	wisski_distillery "github.com/FAU-CDI/wisski-distillery"
 	"github.com/FAU-CDI/wisski-distillery/internal/cli"
-	"github.com/tkw1536/goprogram/exit"
-	"github.com/tkw1536/goprogram/parser"
+	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/sql/impl"
+	"github.com/spf13/cobra"
+	"go.tkw01536.de/pkglib/exit"
+	"go.tkw01536.de/pkglib/nobufio"
+	"go.tkw01536.de/pkglib/stream"
 )
 
-// Shell is the 'shell' command.
-var MakeMysqlAccount wisski_distillery.Command = makeMysqlAccount{}
+func NewMakeMysqlAccountCommand() *cobra.Command {
+	impl := new(makeMysqlAccount)
+
+	cmd := &cobra.Command{
+		Use:   "make_mysql_account",
+		Short: "creates a MySQL account",
+		Args:  cobra.NoArgs,
+		RunE:  impl.Exec,
+	}
+
+	return cmd
+}
 
 type makeMysqlAccount struct{}
 
-func (makeMysqlAccount) Description() wisski_distillery.Description {
-	return wisski_distillery.Description{
-		Requirements: cli.Requirements{
-			NeedsDistillery: true,
-		},
-		ParserConfig: parser.Config{
-			IncludeUnknown: true,
-		},
-		Command:     "make_mysql_account",
-		Description: "opens a shell in the provided instance",
-	}
-}
-
 var (
-	errUnableToReadUsername = exit.NewErrorWithCode("unable to read username", exit.ExitGeneric)
-	errUnableToReadPassword = exit.NewErrorWithCode("unable to read password", exit.ExitGeneric)
-	errUnableToMakeAccount  = exit.NewErrorWithCode("unable to create account", exit.ExitGeneric)
+	errUnableToReadUsername = exit.NewErrorWithCode("unable to read username", cli.ExitGeneric)
+	errUnableToReadPassword = exit.NewErrorWithCode("unable to read password", cli.ExitGeneric)
+	errUnableToMakeAccount  = exit.NewErrorWithCode("unable to create account", cli.ExitGeneric)
 )
 
-func (mma makeMysqlAccount) Run(context wisski_distillery.Context) error {
-	dis := context.Environment
+func (mma *makeMysqlAccount) Exec(cmd *cobra.Command, args []string) error {
+	dis, err := cli.GetDistillery(cmd, cli.Requirements{
+		NeedsDistillery: true,
+	})
 
-	_, _ = context.Printf("Username>")
-	username, err := context.ReadLine()
+	if err != nil {
+		return fmt.Errorf("%w: %w", errUnableToMakeAccount, err)
+	}
+
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Username>")
+	username, err := nobufio.ReadLine(cmd.InOrStdin())
 	if err != nil {
 		return fmt.Errorf("%w: %w", errUnableToReadUsername, err)
 	}
+	username = strings.TrimSpace(username)
 
-	_, _ = context.Printf("Password>")
-	password, err := context.ReadPassword()
+	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Password>")
+	password, err := nobufio.ReadPassword(cmd.InOrStdin())
 	if err != nil {
 		return fmt.Errorf("%w: %w", errUnableToReadPassword, err)
 	}
 
-	if err := dis.SQL().CreateSuperuser(context.Context, username, password, false); err != nil {
+	if err := dis.SQL().Global().Impl.CreateDatabase(cmd.Context(), stream.Null, impl.CreateOpts{
+		Name:        dis.SQL().Global().Database,
+		AllowExists: true,
+
+		CreateUser: true,
+		Superuser:  true,
+		Username:   username,
+		Password:   password,
+	}); err != nil {
 		return fmt.Errorf("%w: %w", errUnableToMakeAccount, err)
 	}
 

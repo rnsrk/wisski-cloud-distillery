@@ -24,7 +24,7 @@ import (
 	"github.com/FAU-CDI/wisski-distillery/internal/wisski/ingredient/reserve"
 	"github.com/FAU-CDI/wisski-distillery/internal/wisski/ingredient/trb"
 	"github.com/FAU-CDI/wisski-distillery/internal/wisski/liquid"
-	"github.com/tkw1536/pkglib/lifetime"
+	"go.tkw01536.de/pkglib/lifetime"
 )
 
 // A WissKI may not be copied.
@@ -129,6 +129,10 @@ func (wisski *WissKI) Blocks() *extras.Blocks {
 	return export[*extras.Blocks](wisski)
 }
 
+func (wisski *WissKI) Modules() *extras.Modules {
+	return export[*extras.Modules](wisski)
+}
+
 func (wisski *WissKI) Stats() *extras.Stats {
 	return export[*extras.Stats](wisski)
 }
@@ -168,6 +172,7 @@ func (wisski *WissKI) allIngredients(context *lifetime.Registry[ingredient.Ingre
 	lifetime.Place[*extras.Pathbuilder](context)
 	lifetime.Place[*extras.Stats](context)
 	lifetime.Place[*extras.Blocks](context)
+	lifetime.Place[*extras.Modules](context)
 	lifetime.Place[*extras.Requirements](context)
 	lifetime.Place[*extras.Adapters](context)
 	lifetime.Place[*extras.Theme](context)

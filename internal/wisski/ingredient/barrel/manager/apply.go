@@ -1,7 +1,7 @@
 //spellchecker:words manager
 package manager
 
-//spellchecker:words context github wisski distillery internal ingredient barrel composer logging pkglib stream
+//spellchecker:words context github wisski distillery internal ingredient barrel composer logging pkglib errorsx stream
 import (
 	"context"
 	"fmt"
@@ -9,8 +9,8 @@ import (
 
 	"github.com/FAU-CDI/wisski-distillery/internal/wisski/ingredient/barrel/composer"
 	"github.com/FAU-CDI/wisski-distillery/pkg/logging"
-	"github.com/tkw1536/pkglib/errorsx"
-	"github.com/tkw1536/pkglib/stream"
+	"go.tkw01536.de/pkglib/errorsx"
+	"go.tkw01536.de/pkglib/stream"
 )
 
 // The instance must be running.
@@ -99,7 +99,7 @@ func (manager *Manager) applyDrupal(ctx context.Context, progress io.Writer, dru
 				{"chmod", "666", "web/sites/default/*settings.php"},
 				{"chmod", "666", "web/sites/default/*services.php"},
 			} {
-				err := manager.dependencies.Barrel.ShellScript(ctx, stream.NonInteractive(progress), script...)
+				err := manager.dependencies.Barrel.BashScript(ctx, stream.NonInteractive(progress), script...)
 				if err != nil {
 					return fmt.Errorf("failed to change permissions before update: %w", err)
 				}
@@ -119,7 +119,7 @@ func (manager *Manager) applyDrupal(ctx context.Context, progress io.Writer, dru
 					{"chmod", "644", "web/sites/default/*settings.php"},
 					{"chmod", "644", "web/sites/default/*services.php"},
 				} {
-					if err := manager.dependencies.Barrel.ShellScript(ctx, stream.NonInteractive(progress), script...); err != nil {
+					if err := manager.dependencies.Barrel.BashScript(ctx, stream.NonInteractive(progress), script...); err != nil {
 						err = fmt.Errorf("failed to reset permissions after update: %w", err)
 						e = errorsx.Combine(e, err)
 					}
@@ -132,9 +132,10 @@ func (manager *Manager) applyDrupal(ctx context.Context, progress io.Writer, dru
 			return fmt.Errorf("failed to log message: %w", err)
 		}
 		{
-			args := []string{
+			args := make([]string, 0, 5)
+			args = append(args, []string{
 				"drupal/internal/core-recommended:", "drupal/internal/core-composer-scaffold:", "drupal/internal/core-project-message:",
-			}
+			}...)
 			for i, cm := range args {
 				args[i] = cm + drupal
 			}
@@ -193,7 +194,13 @@ func (manager *Manager) applyWissKI(ctx context.Context, progress io.Writer, wis
 			return fmt.Errorf("failed to log message: %w", err)
 		}
 		{
-			if err := manager.dependencies.Composer.ExecWissKI(ctx, progress, "install"); err != nil {
+			if err := manager.dependencies.Composer.ExecWissKI(ctx, progress, "config", "allow-plugins", "true"); err != nil {
+				return fmt.Errorf("failed to configure composer: %w", err)
+			}
+			if err := manager.dependencies.Composer.ExecWissKI(ctx, progress, "config", "repositories.drupal", `{"type": "composer", "url": "https://packages.drupal.org/8"}`); err != nil {
+				return fmt.Errorf("failed to install wisski dependencies: %w", err)
+			}
+			if err := manager.dependencies.Composer.ExecWissKI(ctx, progress, "install", "--no-dev"); err != nil {
 				return fmt.Errorf("failed to install wisski dependencies: %w", err)
 			}
 		}
@@ -203,7 +210,7 @@ func (manager *Manager) applyWissKI(ctx context.Context, progress io.Writer, wis
 		}
 		{
 			if err := manager.dependencies.Drush.Enable(ctx, progress,
-				"colorbox", "conditional_fields", "devel", "ds", "field_group", "geofield", "geofield_map", "imce", "leaflet", "leaflet_views", "sophron", "sophron_guesser", "wisski", "wisski_authority_document",
+				"wisski_core", "wisski_linkblock", "wisski_pathbuilder", "wisski_adapter_sparql11_pb", "wisski_salz",
 			); err != nil {
 				return fmt.Errorf("failed to enable wisski modules: %w", err)
 			}

@@ -15,10 +15,9 @@ import (
 
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/server/handling"
 	"github.com/FAU-CDI/wisski-distillery/internal/wdlog"
-	"github.com/gorilla/csrf"
-	"github.com/tkw1536/pkglib/httpx/content"
-	"github.com/tkw1536/pkglib/httpx/form"
-	"github.com/tkw1536/pkglib/httpx/wrap"
+	"go.tkw01536.de/pkglib/httpx/content"
+	"go.tkw01536.de/pkglib/httpx/form"
+	"go.tkw01536.de/pkglib/httpx/wrap"
 )
 
 //go:embed "src/base.html"
@@ -57,7 +56,6 @@ func (tpl *Template[C]) context(r *http.Request, funcs ...FlagFunc) (ctx *tConte
 	ctx.Runtime.RequestURI = r.URL.RequestURI()
 	ctx.Runtime.StartedAt = wrap.TimeStart(r).UTC()
 	ctx.Runtime.GeneratedAt = time.Now().UTC()
-	ctx.Runtime.CSRF = csrf.TemplateField(r)
 	ctx.Runtime.Menu = tpl.templating.buildMenu(r)
 
 	// generate the rest of the options

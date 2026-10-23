@@ -1,35 +1,41 @@
 package cmd
 
-//spellchecker:words slog github wisski distillery internal component exporter wdlog logging goprogram exit
+//spellchecker:words github wisski distillery internal cobra pkglib exit
 import (
 	"fmt"
 
-	wisski_distillery "github.com/FAU-CDI/wisski-distillery"
 	"github.com/FAU-CDI/wisski-distillery/internal/cli"
-	"github.com/tkw1536/goprogram/exit"
+	"github.com/spf13/cobra"
+	"go.tkw01536.de/pkglib/exit"
 )
 
-// backup is the 'backups_prune' command.
-var BackupsPrune wisski_distillery.Command = backupsPrune{}
+func NewBackupsPruneCommand() *cobra.Command {
+	impl := new(backupsPrune)
+
+	cmd := &cobra.Command{
+		Use:   "backups_prune",
+		Short: "prunes old backup archives",
+		Args:  cobra.NoArgs,
+		RunE:  impl.Exec,
+	}
+
+	return cmd
+}
 
 type backupsPrune struct{}
 
-func (backupsPrune) Description() wisski_distillery.Description {
-	return wisski_distillery.Description{
-		Requirements: cli.Requirements{
-			NeedsDistillery: true,
-		},
-		Command:     "backups_prune",
-		Description: "prunes old backup archives",
+var errPruneFailed = exit.NewErrorWithCode("failed to prune backups", cli.ExitGeneric)
+
+func (bp *backupsPrune) Exec(cmd *cobra.Command, args []string) error {
+	dis, err := cli.GetDistillery(cmd, cli.Requirements{
+		NeedsDistillery: true,
+	})
+
+	if err != nil {
+		return fmt.Errorf("%w: %w", errPruneFailed, err)
 	}
-}
 
-var errPruneFailed = exit.NewErrorWithCode("failed to prune backups", exit.ExitGeneric)
-
-func (backupsPrune) Run(context wisski_distillery.Context) error {
-	dis := context.Environment
-
-	if err := dis.Exporter().PruneExports(context.Context, context.Stderr); err != nil {
+	if err := dis.Exporter().PruneExports(cmd.Context(), cmd.ErrOrStderr()); err != nil {
 		return fmt.Errorf("%w: %w", errPruneFailed, err)
 	}
 	return nil

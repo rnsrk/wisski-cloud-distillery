@@ -16,7 +16,7 @@ import (
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/server/templating"
 	"github.com/FAU-CDI/wisski-distillery/internal/status"
 	"github.com/FAU-CDI/wisski-distillery/internal/wisski"
-	"github.com/tkw1536/pkglib/httpx"
+	"go.tkw01536.de/pkglib/httpx"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/julienschmidt/httprouter"
@@ -35,8 +35,11 @@ type instanceDrupalContext struct {
 
 	Instance *wisski.WissKI
 
+	PHPVersion    string
 	DrupalVersion string
-	DefaultTheme  string
+	WissKIVersion string
+
+	DefaultTheme string
 
 	Requirements []status.Requirement
 
@@ -75,7 +78,7 @@ func (admin *Admin) instanceDrupal(context.Context) http.Handler {
 		// get the drupal version
 		//nolint:contextcheck
 		eg.Go(func() (err error) {
-			ctx.DrupalVersion, err = ctx.Instance.Version().Get(r.Context(), nil)
+			ctx.DrupalVersion, ctx.PHPVersion, ctx.WissKIVersion, err = ctx.Instance.Version().Get(r.Context(), nil)
 			return
 		})
 
@@ -98,11 +101,15 @@ func (admin *Admin) instanceDrupal(context.Context) http.Handler {
 		}
 
 		escapedSlug := url.PathEscape(ctx.Instance.Slug)
+		presentFunc, presentErr := admin.preparePanelInstancePage(r, ctx.Instance, "drupal")
+		if presentErr != nil {
+			return ctx, nil, presentErr
+		}
 		return ctx, []templating.FlagFunc{
 			templating.ReplaceCrumb(menuInstance, component.MenuItem{Title: "Instance", Path: template.URL("/admin/instance/" + escapedSlug)}),         // #nosec G203 -- escaped and safe
 			templating.ReplaceCrumb(menuDrupal, component.MenuItem{Title: "Drupal", Path: template.URL("/admin/instance/" + escapedSlug + "/drupal")}), // #nosec G203 -- escaped and safe
 			templating.Title(ctx.Instance.Slug + " - Drupal"),
-			admin.instanceTabs(escapedSlug, "drupal"),
+			presentFunc,
 		}, nil
 	})
 }

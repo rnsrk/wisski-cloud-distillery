@@ -1,7 +1,7 @@
 //spellchecker:words admin
 package admin
 
-//spellchecker:words context embed html template http github wisski distillery internal component instances server assets templating models status pkglib httpx form field julienschmidt httprouter golang maps slices
+//spellchecker:words context embed errors html template http github wisski distillery internal component instances server assets templating models status pkglib httpx form field maps slices julienschmidt httprouter
 import (
 	"context"
 	_ "embed"
@@ -18,8 +18,8 @@ import (
 	"github.com/FAU-CDI/wisski-distillery/internal/models"
 	"github.com/FAU-CDI/wisski-distillery/internal/status"
 	"github.com/FAU-CDI/wisski-distillery/internal/wisski"
-	"github.com/tkw1536/pkglib/httpx"
-	"github.com/tkw1536/pkglib/httpx/form/field"
+	"go.tkw01536.de/pkglib/httpx"
+	"go.tkw01536.de/pkglib/httpx/form/field"
 
 	"maps"
 	"slices"
@@ -145,11 +145,15 @@ func (gc *instanceUsersContext) use(r *http.Request, slug string, admin *Admin) 
 
 	// replace the functions
 	escapedSlug := url.PathEscape(slug)
+	presentFunc, presentErr := admin.preparePanelInstancePage(r, gc.instance, "users")
+	if presentErr != nil {
+		return nil, presentErr
+	}
 	funcs = []templating.FlagFunc{
 		templating.ReplaceCrumb(menuInstance, component.MenuItem{Title: "Instance", Path: template.URL("/admin/instance/" + escapedSlug)}),                // #nosec G203 -- escaped and safe
 		templating.ReplaceCrumb(menuGrants, component.MenuItem{Title: "Users & Grants", Path: template.URL("/admin/instance/" + escapedSlug + "/users")}), // #nosec G203 -- escaped and safe
 		templating.Title(gc.Instance.Slug + " - Users & Grants"),
-		admin.instanceTabs(escapedSlug, "users"),
+		presentFunc,
 	}
 	return funcs, nil
 }

@@ -1,10 +1,10 @@
 //spellchecker:words component
 package component
 
+//spellchecker:words github wisski distillery internal models
+import "github.com/FAU-CDI/wisski-distillery/internal/models"
+
 //spellchecker:words reflect
-import (
-	"reflect"
-)
 
 // Table is a component that manages a provided sql table.
 type Table interface {
@@ -15,6 +15,9 @@ type Table interface {
 }
 
 type TableInfo struct {
-	Model reflect.Type // model is the model this type manages
-	Name  string
+	Model models.Model
+}
+
+func (ti TableInfo) Name() string {
+	return ti.Model.TableName()
 }

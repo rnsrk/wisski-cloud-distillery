@@ -1,7 +1,7 @@
 //spellchecker:words auth
 package auth
 
-//spellchecker:words bytes context encoding base image reflect strings github wisski distillery internal component models passwordx errors pquerna totp pkglib password golang crypto bcrypt
+//spellchecker:words bytes context encoding base errors image strings github wisski distillery internal component models passwordx pquerna totp pkglib password golang crypto bcrypt gorm
 import (
 	"bytes"
 	"context"
@@ -9,16 +9,17 @@ import (
 	"errors"
 	"fmt"
 	"image/png"
-	"reflect"
 	"strings"
 
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component"
+	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/sql"
 	"github.com/FAU-CDI/wisski-distillery/internal/models"
 	"github.com/FAU-CDI/wisski-distillery/internal/passwordx"
 	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/totp"
-	"github.com/tkw1536/pkglib/password"
+	"go.tkw01536.de/pkglib/password"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 // ErrUserNotFound is returned when a user is not found.
@@ -26,24 +27,22 @@ var ErrUserNotFound = errors.New("user not found")
 
 func (auth *Auth) TableInfo() component.TableInfo {
 	return component.TableInfo{
-		Name:  models.UserTable,
-		Model: reflect.TypeFor[models.User](),
+		Model: models.User{},
 	}
 }
 
 // Users returns all users in the database.
 func (auth *Auth) Users(ctx context.Context) (users []*AuthUser, err error) {
 	// query the user table
-	table, err := auth.dependencies.SQL.QueryTable(ctx, auth)
+	table, err := sql.OpenInterface[models.User](ctx, auth.dependencies.SQL, auth)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query table: %w", err)
+		return nil, fmt.Errorf("failed to open interface: %w", err)
 	}
 
 	// find all the users
-	var dUsers []models.User
-	err = table.Find(&dUsers).Error
+	dUsers, err := table.Find(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to find users: %w", err)
 	}
 
 	// and map them to high-level user objects
@@ -59,34 +58,28 @@ func (auth *Auth) Users(ctx context.Context) (users []*AuthUser, err error) {
 }
 
 // User returns a single user.
-// If the user does not exist, returns ErrUserNotFound.
-func (auth *Auth) User(ctx context.Context, name string) (user *AuthUser, err error) {
+// If the user does not exist, returns [ErrUserNotFound].
+func (auth *Auth) User(ctx context.Context, name string) (au *AuthUser, err error) {
 	// quick and dirty check for the empty username (which is not allowed)
 	if name == "" {
 		return nil, ErrUserNotFound
 	}
 
-	// return the user
-	table, err := auth.dependencies.SQL.QueryTable(ctx, auth)
+	table, err := sql.OpenInterface[models.User](ctx, auth.dependencies.SQL, auth)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query table: %w", err)
+		return nil, fmt.Errorf("failed to open interface: %w", err)
 	}
 
-	user = &AuthUser{}
-
-	// find the user
-	res := table.Where(&models.User{User: name}).Find(&user.User)
-	err = res.Error
+	au = &AuthUser{}
+	au.User, err = table.Where(&models.User{User: name}).First(ctx)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, fmt.Errorf("%w: %w", ErrUserNotFound, err)
+	}
 	if err != nil {
-		return
+		return nil, fmt.Errorf("failed to find user: %w", err)
 	}
 
-	// check if the user was not found
-	if res.RowsAffected == 0 {
-		return nil, ErrUserNotFound
-	}
-
-	user.auth = auth
+	au.auth = auth
 
 	return
 }
@@ -94,28 +87,25 @@ func (auth *Auth) User(ctx context.Context, name string) (user *AuthUser, err er
 // CreateUser creates a new user and returns it.
 // The user is not associated to any WissKIs, and has no password set.
 func (auth *Auth) CreateUser(ctx context.Context, name string) (user *AuthUser, err error) {
-	// return the user
-	table, err := auth.dependencies.SQL.QueryTable(ctx, auth)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query table: %w", err)
-	}
-
 	user = &AuthUser{
 		User: models.User{
 			User: name,
 		},
+		auth: auth,
 	}
 	user.SetAdmin(false)
 	user.SetEnabled(false)
 	user.SetTOTPEnabled(false)
 
-	// do the create statement
-	err = table.Select("*").Create(&user.User).Error
+	table, err := sql.OpenInterface[models.User](ctx, auth.dependencies.SQL, auth)
 	if err != nil {
+		return nil, fmt.Errorf("failed to open interface: %w", err)
+	}
+
+	if err := table.Create(ctx, &user.User); err != nil {
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
 
-	user.auth = auth
 	return user, nil
 }
 
@@ -330,20 +320,22 @@ func (au *AuthUser) MakeRegular(ctx context.Context) error {
 
 // Save saves the given user in the database.
 func (au *AuthUser) Save(ctx context.Context) error {
-	table, err := au.auth.dependencies.SQL.QueryTable(ctx, au.auth)
+	table, err := sql.OpenInterface[models.User](ctx, au.auth.dependencies.SQL, au.auth)
 	if err != nil {
 		return fmt.Errorf("failed to query table: %w", err)
 	}
-	return table.Select("*").Updates(&au.User).Error
+
+	{
+		_, err := table.Select("*").Updates(ctx, au.User)
+		if err != nil {
+			return fmt.Errorf("failed to save user: %w", err)
+		}
+	}
+	return nil
 }
 
 // Delete deletes the user from the database.
 func (au *AuthUser) Delete(ctx context.Context) error {
-	table, err := au.auth.dependencies.SQL.QueryTable(ctx, au.auth)
-	if err != nil {
-		return fmt.Errorf("failed to query table: %w", err)
-	}
-
 	// run all the user delete hooks
 	for _, c := range au.auth.dependencies.UserDeleteHooks {
 		if err := c.OnUserDelete(ctx, &au.User); err != nil {
@@ -351,5 +343,13 @@ func (au *AuthUser) Delete(ctx context.Context) error {
 		}
 	}
 
-	return table.Delete(&au.User).Error
+	table, err := sql.OpenInterface[models.User](ctx, au.auth.dependencies.SQL, au.auth)
+	if err != nil {
+		return fmt.Errorf("failed to query table: %w", err)
+	}
+
+	if _, err := table.Where("pk = ?", au.User.Pk).Delete(ctx); err != nil {
+		return fmt.Errorf("failed to delete user from db: %w", err)
+	}
+	return nil
 }

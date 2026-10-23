@@ -1,17 +1,17 @@
 //spellchecker:words legal
 package legal
 
-//spellchecker:words context http github wisski distillery internal component server assets handling templating embed
+//spellchecker:words context http github wisski distillery internal component server assets handling templating notices embed
 import (
 	"context"
 	"net/http"
 
-	"github.com/FAU-CDI/wisski-distillery/internal/cli"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/server"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/server/assets"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/server/handling"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/server/templating"
+	"github.com/FAU-CDI/wisski-distillery/internal/notices"
 
 	_ "embed"
 )
@@ -70,7 +70,7 @@ func (legal *Legal) HandleRoute(ctx context.Context, route string) (http.Handler
 	)
 
 	return tpl.HTMLHandler(legal.dependencies.Handling, func(r *http.Request) (lc legalContext, err error) {
-		lc.LegalNotices = cli.LegalNotices
+		lc.LegalNotices = notices.LegalNotices
 
 		lc.CSRFCookie = server.CSRFCookie
 		lc.SessionCookie = server.SessionCookie

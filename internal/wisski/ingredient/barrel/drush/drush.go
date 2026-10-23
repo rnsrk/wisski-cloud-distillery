@@ -10,7 +10,7 @@ import (
 	"github.com/FAU-CDI/wisski-distillery/internal/wisski/ingredient"
 	"github.com/FAU-CDI/wisski-distillery/internal/wisski/ingredient/barrel"
 	"github.com/FAU-CDI/wisski-distillery/internal/wisski/ingredient/php"
-	"github.com/tkw1536/pkglib/stream"
+	"go.tkw01536.de/pkglib/stream"
 )
 
 // Drush implements commands related to drush.
@@ -32,7 +32,7 @@ func (drush *Drush) Enable(ctx context.Context, progress io.Writer, modules ...s
 
 func (drush *Drush) Exec(ctx context.Context, progress io.Writer, command ...string) error {
 	script := append([]string{"drush"}, command...)
-	if err := drush.dependencies.Barrel.ShellScript(ctx, stream.NonInteractive(progress), script...); err != nil {
+	if err := drush.dependencies.Barrel.BashScript(ctx, stream.NonInteractive(progress), script...); err != nil {
 		return fmt.Errorf("drush returned error: %w", err)
 	}
 	return nil

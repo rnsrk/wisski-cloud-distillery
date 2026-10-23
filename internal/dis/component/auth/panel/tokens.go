@@ -1,7 +1,7 @@
 //spellchecker:words panel
 package panel
 
-//spellchecker:words context html template http github wisski distillery internal component auth server assets templating models wdlog pkglib httpx form field embed
+//spellchecker:words context errors html template http github wisski distillery internal component auth server assets templating models wdlog pkglib httpx form field embed
 import (
 	"context"
 	"errors"
@@ -15,9 +15,9 @@ import (
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/server/templating"
 	"github.com/FAU-CDI/wisski-distillery/internal/models"
 	"github.com/FAU-CDI/wisski-distillery/internal/wdlog"
-	"github.com/tkw1536/pkglib/httpx"
-	"github.com/tkw1536/pkglib/httpx/form"
-	"github.com/tkw1536/pkglib/httpx/form/field"
+	"go.tkw01536.de/pkglib/httpx"
+	"go.tkw01536.de/pkglib/httpx/form"
+	"go.tkw01536.de/pkglib/httpx/form/field"
 
 	_ "embed"
 )
@@ -76,6 +76,7 @@ func (panel *UserPanel) tokensRoute(context.Context) http.Handler {
 func (panel *UserPanel) tokensDeleteRoute(ctx context.Context) http.Handler {
 	logger := wdlog.Of(ctx)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Body = http.MaxBytesReader(w, r.Body, maxBodyFormBytes)
 		if err := r.ParseForm(); err != nil {
 			logger.Error(
 				"failed to parse form",

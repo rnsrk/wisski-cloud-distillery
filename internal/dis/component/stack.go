@@ -3,7 +3,7 @@
 //spellchecker:words component
 package component
 
-//spellchecker:words context path filepath github wisski distillery compose execx unpack errors pkglib umaskfree stream gopkg yaml
+//spellchecker:words context errors path filepath github wisski distillery internal dockerenv dockerx unpack pkglib errorsx umaskfree gopkg yaml
 import (
 	"context"
 	"errors"
@@ -13,168 +13,19 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/FAU-CDI/wisski-distillery/pkg/compose"
-	"github.com/FAU-CDI/wisski-distillery/pkg/execx"
+	"github.com/FAU-CDI/wisski-distillery/internal/dockerenv"
+	"github.com/FAU-CDI/wisski-distillery/pkg/dockerx"
 	"github.com/FAU-CDI/wisski-distillery/pkg/unpack"
-	"github.com/tkw1536/pkglib/errorsx"
-	"github.com/tkw1536/pkglib/fsx"
-	"github.com/tkw1536/pkglib/fsx/umaskfree"
-	"github.com/tkw1536/pkglib/stream"
+	"go.tkw01536.de/pkglib/errorsx"
+	"go.tkw01536.de/pkglib/fsx"
+	"go.tkw01536.de/pkglib/fsx/umaskfree"
 	"gopkg.in/yaml.v3"
 )
-
-// Stack represents a 'docker compose' stack living in a specific directory
-//
-// NOTE(twiesing): In the current implementation this requires a 'docker' executable on the system.
-// This executable must be capable of the 'docker compose' command.
-// In the future the idea is to replace this with a native docker compose client.
-type Stack struct {
-	Dir string // Directory this Stack is located in
-
-	DockerExecutable string // Path to the native docker executable to use
-}
-
-var errStackKill = errors.New("Stack.Kill: Kill returned non-zero exit code")
-
-func (ds Stack) Kill(ctx context.Context, progress io.Writer, service string, signal os.Signal) error {
-	code := ds.compose(ctx, stream.NonInteractive(progress), "kill", service, "-s", signal.String())()
-	if code != 0 {
-		return errStackKill
-	}
-	return nil
-}
-
-var errStackUpdatePull = errors.New("Stack.Update: Pull returned non-zero exit code")
-var errStackUpdateBuild = errors.New("Stack.Update: Build returned non-zero exit code")
-
-// Update pulls, builds, and then optionally starts this stack.
-// This does not have a direct 'docker compose' shell equivalent.
-//
-// See also Up.
-func (ds Stack) Update(ctx context.Context, progress io.Writer, start bool) error {
-	if code := ds.compose(ctx, stream.NonInteractive(progress), "pull")(); code != 0 {
-		return errStackUpdatePull
-	}
-
-	if code := ds.compose(ctx, stream.NonInteractive(progress), "build", "--pull")(); code != 0 {
-		return errStackUpdateBuild
-	}
-
-	if start {
-		return ds.Up(ctx, progress)
-	}
-	return nil
-}
-
-var errStackUp = errors.New("Stack.Up: Up returned non-zero exit code")
-
-// Up creates and starts the containers in this Stack.
-// It is equivalent to 'docker compose up --force-recreate --remove-orphans --detach' on the shell.
-func (ds Stack) Up(ctx context.Context, progress io.Writer) error {
-	if code := ds.compose(ctx, stream.NonInteractive(progress), "up", "--force-recreate", "--remove-orphans", "--detach")(); code != 0 {
-		return errStackUp
-	}
-	return nil
-}
-
-// Exec executes an executable in the provided running service.
-// It is equivalent to 'docker compose exec $service $executable $args...'.
-//
-// It returns the exit code of the process.
-func (ds Stack) Exec(ctx context.Context, io stream.IOStream, service, executable string, args ...string) func() int {
-	compose := []string{"exec"}
-	if !io.StdinIsATerminal() {
-		compose = append(compose, "-T")
-	}
-
-	compose = append(compose, service)
-	compose = append(compose, executable)
-	compose = append(compose, args...)
-
-	return ds.compose(ctx, io, compose...)
-}
-
-type RunFlags struct {
-	AutoRemove bool
-	Detach     bool
-}
-
-// Run runs a command in a running container with the given executable.
-// It is equivalent to 'docker compose run [--rm] $service $executable $args...'.
-//
-// It returns the exit code of the process.
-func (ds Stack) Run(ctx context.Context, io stream.IOStream, flags RunFlags, service, command string, args ...string) (int, error) {
-	compose := []string{"run"}
-	if flags.AutoRemove {
-		compose = append(compose, "--rm")
-	}
-	if !io.StdinIsATerminal() {
-		compose = append(compose, "--no-TTY")
-	}
-	if flags.Detach {
-		compose = append(compose, "--detach")
-	}
-
-	compose = append(compose, service, command)
-	compose = append(compose, args...)
-
-	code := ds.compose(ctx, io, compose...)()
-	return code, nil
-}
-
-var errStackRestart = errors.New("Stack.Restart: Restart returned non-zero exit code")
-
-// Restart restarts all containers in this Stack.
-// It is equivalent to 'docker compose restart' on the shell.
-func (ds Stack) Restart(ctx context.Context, progress io.Writer) error {
-	code := ds.compose(ctx, stream.NonInteractive(progress), "restart")()
-	if code != 0 {
-		return errStackRestart
-	}
-	return nil
-}
-
-var errStackDown = errors.New("Stack.Down: Down returned non-zero exit code")
-
-// Down stops and removes all containers in this Stack.
-// It is equivalent to 'docker compose down -v' on the shell.
-func (ds Stack) Down(ctx context.Context, progress io.Writer) error {
-	code := ds.compose(ctx, stream.NonInteractive(progress), "down", "-v")()
-	if code != 0 {
-		return errStackDown
-	}
-	return nil
-}
-
-// DownAll stops and removes all containers in this Stack, and those not defined in the compose file.
-// It is equivalent to 'docker compose down -v --remove-orphans' on the shell.
-func (ds Stack) DownAll(ctx context.Context, progress io.Writer) error {
-	code := ds.compose(ctx, stream.NonInteractive(progress), "down", "-v", "--remove-orphans")()
-	if code != 0 {
-		return errStackDown
-	}
-	return nil
-}
-
-// compose executes a 'docker compose' command on this stack.
-//
-// NOTE(twiesing): Check if this can be replaced by an internal call to libcompose.
-// But probably not.
-func (ds Stack) compose(ctx context.Context, io stream.IOStream, args ...string) func() int {
-	if ds.DockerExecutable == "" {
-		var err error
-		ds.DockerExecutable, err = execx.LookPathAbs("docker")
-		if err != nil {
-			return execx.CommandErrorFunc
-		}
-	}
-	return execx.Exec(ctx, io, ds.Dir, ds.DockerExecutable, append([]string{"compose"}, args...)...)
-}
 
 // StackWithResources represents a Stack that can be automatically installed from a set of resources.
 // See the [Install] method.
 type StackWithResources struct {
-	Stack
+	*dockerx.Stack
 
 	// Installable enabled installing several resources from a (potentially embedded) filesystem.
 	//
@@ -295,7 +146,7 @@ func (is StackWithResources) Install(ctx context.Context, progress io.Writer, co
 		if _, err := fmt.Fprintf(progress, "[copy]    %s (from %s)\n", dst, src); err != nil {
 			return fmt.Errorf("failed to report progress: %w", err)
 		}
-		if err := umaskfree.CopyFile(ctx, dst, src); err != nil {
+		if err := umaskfree.CopyFile(dst, src); err != nil {
 			return fmt.Errorf("unable to copy file %s: %w", src, err)
 		}
 	}
@@ -342,9 +193,9 @@ func (is StackWithResources) Install(ctx context.Context, progress io.Writer, co
 		if _, err := fmt.Fprintln(progress, "[checking]"); err != nil {
 			return fmt.Errorf("failed to report progress: %w", err)
 		}
-		_, err := compose.Open(is.Dir)
+		_, err := is.Project(ctx)
 		if err != nil {
-			return fmt.Errorf("failed to open directory: %w", err)
+			return fmt.Errorf("failed to validate project: %w", err)
 		}
 	}
 
@@ -361,6 +212,13 @@ func addComposeFileHeader(path string) (e error) {
 		return fmt.Errorf("failed to read file: %w", err)
 	}
 
+	// parse proper yaml
+	var node yaml.Node
+	if err := yaml.Unmarshal(bytes, &node); err != nil {
+		return fmt.Errorf("failed to unmarshal bytes: %w", err)
+	}
+	clearYAMLComments(&node)
+
 	// overwrite the file
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_TRUNC, umaskfree.DefaultFilePerm) // #nosec G304 -- intended
 	if err != nil {
@@ -373,12 +231,28 @@ func addComposeFileHeader(path string) (e error) {
 		return nil
 	}
 
-	// write the original content
-	if _, err := f.Write(bytes); err != nil {
+	// re-encode yaml bytes
+	encoder := yaml.NewEncoder(f)
+	encoder.SetIndent(2)
+
+	if err := encoder.Encode(&node); err != nil {
 		return fmt.Errorf("failed to write compose file; %w", err)
 	}
 
+	if err := encoder.Close(); err != nil {
+		return fmt.Errorf("failed to close encoder: %w", err)
+	}
+
 	return nil
+}
+
+func clearYAMLComments(node *yaml.Node) {
+	node.HeadComment = ""
+	node.LineComment = ""
+	node.FootComment = ""
+	for _, child := range node.Content {
+		clearYAMLComments(child)
+	}
 }
 
 // doComposeFile updates the compose file using the update function.
@@ -447,7 +321,7 @@ func writeEnvFile(path string, perm fs.FileMode, variables map[string]string) (e
 	defer errorsx.Close(file, &e, "file")
 
 	// write the file!
-	_, err = compose.WriteEnvFile(file, variables)
+	_, err = dockerenv.WriteEnvFile(file, variables)
 	if err != nil {
 		return fmt.Errorf("failed to write env file: %w", err)
 	}

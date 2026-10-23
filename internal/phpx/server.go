@@ -1,7 +1,7 @@
 //spellchecker:words phpx
 package phpx
 
-//spellchecker:words bytes compress flate context encoding base json regexp slices strings sync embed github pkglib lazy status stream
+//spellchecker:words bytes compress flate context encoding base json regexp slices strings sync embed pkglib errorsx lazy status stream
 import (
 	"bytes"
 	"compress/flate"
@@ -18,10 +18,10 @@ import (
 
 	_ "embed"
 
-	"github.com/tkw1536/pkglib/errorsx"
-	"github.com/tkw1536/pkglib/lazy"
-	"github.com/tkw1536/pkglib/status"
-	"github.com/tkw1536/pkglib/stream"
+	"go.tkw01536.de/pkglib/errorsx"
+	"go.tkw01536.de/pkglib/lazy"
+	"go.tkw01536.de/pkglib/status"
+	"go.tkw01536.de/pkglib/stream"
 )
 
 // Server represents a server that executes PHP code.

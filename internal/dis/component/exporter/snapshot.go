@@ -1,7 +1,7 @@
 //spellchecker:words exporter
 package exporter
 
-//spellchecker:words context path filepath time github wisski distillery internal component models wdlog ingredient locker logging pkglib collection contextx status golang maps slices
+//spellchecker:words context encoding json path filepath time maps slices github wisski distillery internal component models wdlog logging pkglib collection contextx errorsx status
 import (
 	"context"
 	"fmt"
@@ -17,12 +17,11 @@ import (
 	"github.com/FAU-CDI/wisski-distillery/internal/models"
 	"github.com/FAU-CDI/wisski-distillery/internal/wdlog"
 	"github.com/FAU-CDI/wisski-distillery/internal/wisski"
-	"github.com/FAU-CDI/wisski-distillery/internal/wisski/ingredient/locker"
 	"github.com/FAU-CDI/wisski-distillery/pkg/logging"
-	"github.com/tkw1536/pkglib/collection"
-	"github.com/tkw1536/pkglib/contextx"
-	"github.com/tkw1536/pkglib/errorsx"
-	"github.com/tkw1536/pkglib/status"
+	"go.tkw01536.de/pkglib/collection"
+	"go.tkw01536.de/pkglib/contextx"
+	"go.tkw01536.de/pkglib/errorsx"
+	"go.tkw01536.de/pkglib/status"
 )
 
 // SnapshotDescription is a description for a snapshot.
@@ -67,8 +66,7 @@ type Snapshot struct {
 func (exporter *Exporter) NewSnapshot(ctx context.Context, instance *wisski.WissKI, progress io.Writer, desc SnapshotDescription) (snapshot Snapshot) {
 	// #nosec G104
 	logging.LogMessage(progress, "Locking instance") //nolint:errcheck // no way to report error
-	if !instance.Locker().TryLock(ctx) {
-		err := locker.ErrLocked
+	if err := instance.Locker().TryLock(ctx); err != nil {
 		_, _ = fmt.Fprintln(progress, err)
 		_, _ = fmt.Fprintln(progress, "Aborting snapshot creation")
 
@@ -88,7 +86,7 @@ func (exporter *Exporter) NewSnapshot(ctx context.Context, instance *wisski.Wiss
 
 	// setup the snapshot
 	snapshot.Description = desc
-	exporter.resolveParts(ctx, desc.Parts, &snapshot)
+	exporter.resolveParts(ctx, instance.Instance, desc.Parts, &snapshot)
 	snapshot.Instance = instance.Instance
 
 	// capture anything critical, and write the end time
@@ -119,7 +117,7 @@ func (exporter *Exporter) NewSnapshot(ctx context.Context, instance *wisski.Wiss
 // resolveParts resolves parts, and writes it into snapshot.Description.Parts.
 // Also sets up snapshot.partsRunning and snapshot.partsStopped.
 // sends a warning about unknown parts into the logger in context.
-func (snapshots *Exporter) resolveParts(ctx context.Context, parts []string, snapshot *Snapshot) {
+func (snapshots *Exporter) resolveParts(ctx context.Context, instance models.Instance, parts []string, snapshot *Snapshot) {
 	partMap := make(map[string]component.Snapshotable, len(snapshots.dependencies.Snapshotable))
 	for _, part := range snapshots.dependencies.Snapshotable {
 		partMap[part.SnapshotName()] = part
@@ -157,7 +155,7 @@ func (snapshots *Exporter) resolveParts(ctx context.Context, parts []string, sna
 	// and setup the map for running and stopped parts!
 	for _, name := range snapshot.Description.Parts {
 		part := partMap[name]
-		if part.SnapshotNeedsRunning() {
+		if part.SnapshotNeedsRunning(instance) {
 			snapshot.partsRunning = append(snapshot.partsRunning, part)
 		} else {
 			snapshot.partsStopped = append(snapshot.partsStopped, part)
@@ -167,16 +165,22 @@ func (snapshots *Exporter) resolveParts(ctx context.Context, parts []string, sna
 
 func (snapshot *Snapshot) makeParts(ctx context.Context, progress io.Writer, _ *Exporter, instance *wisski.WissKI, needsRunning bool) (errmap map[string]error, logmap map[string]string) {
 	if !needsRunning && !snapshot.Description.Keepalive {
-		stack := instance.Barrel().Stack()
+		stack, err := instance.Barrel().OpenStack()
+		if err == nil {
+			defer errorsx.Close(stack, &snapshot.ErrStop, "stack")
 
-		_, _ = logging.LogMessage(progress, "Stopping instance")
-		snapshot.ErrStop = stack.Down(ctx, progress)
+			_, _ = logging.LogMessage(progress, "Stopping instance")
+			snapshot.ErrStop = stack.Down(ctx, progress)
 
-		defer func() {
-			_, _ = logging.LogMessage(progress, "Starting instance")
-			snapshot.ErrStart = stack.Up(ctx, progress)
-		}()
+			defer func() {
+				_, _ = logging.LogMessage(progress, "Starting instance")
+				snapshot.ErrStart = stack.Start(ctx, progress)
+			}()
+		} else {
+			snapshot.ErrStart = fmt.Errorf("failed to stop stack: %w", err)
+		}
 	}
+
 	// handle writing the manifest!
 	manifest, done := snapshot.handleManifest(snapshot.Description.Dest)
 	defer done()

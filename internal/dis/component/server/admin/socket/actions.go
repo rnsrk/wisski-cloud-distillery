@@ -1,7 +1,7 @@
 //spellchecker:words socket
 package socket
 
-//spellchecker:words context errors http github process over websocket proto wisski distillery internal component server admin socket actions wdlog pkglib contextx
+//spellchecker:words context errors http github process over websocket proto wisski distillery internal component server admin socket actions wdlog pkglib errorsx
 import (
 	"context"
 	"errors"
@@ -12,8 +12,7 @@ import (
 	"github.com/FAU-CDI/process_over_websocket/proto"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/server/admin/socket/actions"
 	"github.com/FAU-CDI/wisski-distillery/internal/wdlog"
-	"github.com/tkw1536/pkglib/contextx"
-	"github.com/tkw1536/pkglib/errorsx"
+	"go.tkw01536.de/pkglib/errorsx"
 )
 
 func (sockets *Sockets) Actions(ctx context.Context) proto.Handler {
@@ -78,10 +77,7 @@ func (sockets *Sockets) Actions(ctx context.Context) proto.Handler {
 		}
 
 		return proto.ProcessFunc(func(ictx context.Context, input io.Reader, output io.Writer, args ...string) (res any, err error) {
-			// defer func() {
-			//	logger.Err(err).Str("action", name).Msg("finished pow action")
-			// }()
-			return action.Run(contextx.WithValuesOf(ictx, ctx), input, output, args...)
+			return action.Run(wdlog.Set(ctx, wdlog.Of(ictx)), input, output, args...)
 		}), nil
 	})
 }

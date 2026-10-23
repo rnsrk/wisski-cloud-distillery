@@ -5,6 +5,7 @@ package status
 import (
 	"fmt"
 	"html/template"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -14,7 +15,8 @@ import (
 
 // WissKI provides information about a single WissKI.
 type WissKI struct {
-	Time time.Time // Time this info was built
+	Time  time.Time // Time this info was built
+	Error error     // error during fetching this information
 
 	Slug string // slug
 	URL  string // complete URL, including http(s)
@@ -31,7 +33,9 @@ type WissKI struct {
 	LastUpdate  time.Time
 	LastCron    time.Time
 
+	PHPVersion    string // current php version
 	DrupalVersion string // current drupal version
+	WissKIVersion string // current wisski version
 	Theme         string // current default theme
 
 	// Statistics of the WissKI
@@ -49,6 +53,27 @@ type WissKI struct {
 	Pathbuilders map[string]string // all the pathbuilders
 	Users        []DrupalUser      // all the known users
 	Grants       []models.Grant
+
+	Instance models.Instance
+
+	// installed drupal modules
+	Modules []DrushExtendedModuleInfo
+}
+
+// NextURL returns a URL that will forward authorized users to the given target.
+func NextURL(target string) string {
+	return "/next/?next=" + url.PathEscape(target)
+}
+
+// LoginURL returns a URL that will forward authorized users to the given slug and path.
+func (wisski WissKI) LoginURL() template.URL {
+	// #nosec G203 -- we explicitly want this
+	return template.URL(NextURL(wisski.URL))
+}
+
+// Checks if this information is ok OK.
+func (wisski WissKI) OK() bool {
+	return wisski.Error == nil
 }
 
 // Requirement represents a drupal requirement or status check.
@@ -159,4 +184,29 @@ func (bs BundleStatistics) Summary() string {
 	}
 
 	return fmt.Sprintf("%d %s in %d %s", totalCount, entitySubject, len(bs.Bundles), bundleSubject)
+}
+
+type DrushExtendedModuleInfo struct {
+	DrushModuleInfo
+	Composer *ComposerModuleInfo `json:"composer"`
+}
+
+func (demi DrushExtendedModuleInfo) HasComposer() bool {
+	return demi.Composer != nil
+}
+
+type DrushModuleInfo struct {
+	Name        string `json:"name"`
+	DisplayName string `json:"display_name"`
+
+	Type    string `json:"type"`
+	Path    string `json:"path"`
+	Enabled bool   `json:"enabled"`
+	Version string `json:"version"`
+}
+
+type ComposerModuleInfo struct {
+	Name    string `json:"name"`
+	Path    string `json:"path"`
+	Version string `json:"version"`
 }

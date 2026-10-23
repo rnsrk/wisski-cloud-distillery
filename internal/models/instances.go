@@ -8,8 +8,7 @@ import (
 	"time"
 )
 
-// InstanceTable is the name of the table the 'Instance' model is stored in.
-const InstanceTable = "distillery"
+var _ Model = Instance{}
 
 // Instance is a WissKI Instance stored inside the sql database.
 //
@@ -27,8 +26,8 @@ type Instance struct {
 	// slug of the system
 	Slug string `gorm:"column:slug;not null;unique"`
 
-	// email address of the system owner (if any)
-	OwnerEmail string `gorm:"column:owner_email;type:varchar(320)"`
+	// free-text admin comment for this instance
+	Comment string `gorm:"column:comment;type:longtext"`
 
 	// should we automatically enable updates for the system?
 	AutoBlindUpdateEnabled SQLBit1 `gorm:"column:auto_blind_update_enabled;default:1"`
@@ -48,6 +47,10 @@ type Instance struct {
 	GraphDBRepository string `gorm:"column:graphdb_repository;not null"`
 	GraphDBUsername   string `gorm:"column:graphdb_user;not null"`
 	GraphDBPassword   string `gorm:"column:graphdb_password;not null"`
+}
+
+func (Instance) TableName() string {
+	return "distillery"
 }
 
 func (i Instance) IsBlindUpdateEnabled() bool {

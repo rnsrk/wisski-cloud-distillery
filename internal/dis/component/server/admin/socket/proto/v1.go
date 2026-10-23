@@ -1,7 +1,7 @@
 //spellchecker:words proto
 package proto
 
-//spellchecker:words context encoding json errors sync time github wisski distillery internal component auth gorilla websocket pkglib recovery websocketx
+//spellchecker:words context encoding json errors sync time github wisski distillery internal component auth gorilla websocket pkglib errorsx recovery websocketx
 import (
 	"context"
 	"encoding/json"
@@ -13,9 +13,9 @@ import (
 
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/auth"
 	"github.com/gorilla/websocket"
-	"github.com/tkw1536/pkglib/errorsx"
-	"github.com/tkw1536/pkglib/recovery"
-	"github.com/tkw1536/pkglib/websocketx"
+	"go.tkw01536.de/pkglib/errorsx"
+	"go.tkw01536.de/pkglib/recovery"
+	"go.tkw01536.de/pkglib/websocketx"
 )
 
 var (

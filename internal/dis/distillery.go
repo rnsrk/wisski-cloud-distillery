@@ -38,13 +38,12 @@ import (
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/server/logo"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/server/news"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/server/templating"
-	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/solr"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/sql"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/ssh2"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/ssh2/sshkeys"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/triplestore"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/web"
-	"github.com/tkw1536/pkglib/lifetime"
+	"go.tkw01536.de/pkglib/lifetime"
 )
 
 // Distillery represents a WissKI Distillery
@@ -162,11 +161,6 @@ func (dis *Distillery) allComponents(context *lifetime.Registry[component.Compon
 	lifetime.Place[*sql.LockTable](context)
 	lifetime.Place[*sql.InstanceTable](context)
 
-	lifetime.Register(context, func(s *solr.Solr, _ component.Still) {
-		s.BaseURL = dis.Upstream.SolrAddr()
-		s.PollInterval = time.Second
-	})
-
 	// auth
 	lifetime.Place[*auth.Auth](context)
 	lifetime.Place[*policy.Policy](context)
@@ -232,6 +226,7 @@ func (dis *Distillery) allComponents(context *lifetime.Registry[component.Compon
 	lifetime.Place[*actions.InstallDompurifyJS](context)
 	lifetime.Place[*actions.InstallMiradorJS](context)
 	lifetime.Place[*actions.InstallIIPMooViewerJS](context)
+	lifetime.Place[*actions.InstanceLog](context)
 	lifetime.Place[*actions.Start](context)
 	lifetime.Place[*actions.Stop](context)
 	lifetime.Place[*actions.Purge](context)

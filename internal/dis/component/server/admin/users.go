@@ -13,9 +13,9 @@ import (
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/server/assets"
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component/server/templating"
 	"github.com/FAU-CDI/wisski-distillery/internal/wdlog"
-	"github.com/tkw1536/pkglib/httpx"
-	"github.com/tkw1536/pkglib/httpx/form"
-	"github.com/tkw1536/pkglib/httpx/form/field"
+	"go.tkw01536.de/pkglib/httpx"
+	"go.tkw01536.de/pkglib/httpx/form"
+	"go.tkw01536.de/pkglib/httpx/form/field"
 
 	_ "embed"
 )
@@ -149,6 +149,7 @@ var errNotCurrentUser = httpx.Response{
 func (admin *Admin) useraction(ctx context.Context, name string, action func(r *http.Request, user *auth.AuthUser) error) http.Handler {
 	logger := wdlog.Of(ctx)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Body = http.MaxBytesReader(w, r.Body, maxBodyFormBytes)
 		if err := r.ParseForm(); err != nil {
 			logger.Error(
 				"failed to parse form",
@@ -255,6 +256,7 @@ func (admin *Admin) usersImpersonateHandler(ctx context.Context) http.Handler {
 	logger := wdlog.Of(ctx)
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Body = http.MaxBytesReader(w, r.Body, maxBodyFormBytes)
 		if err := r.ParseForm(); err != nil {
 			logger.Error(
 				"failed to parse form",

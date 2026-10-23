@@ -1,62 +1,79 @@
 package cmd
 
-//spellchecker:words encoding json github wisski distillery internal goprogram exit
+//spellchecker:words encoding json github wisski distillery internal cobra pkglib exit
 import (
 	"encoding/json"
 	"fmt"
 
-	wisski_distillery "github.com/FAU-CDI/wisski-distillery"
 	"github.com/FAU-CDI/wisski-distillery/internal/cli"
-	"github.com/tkw1536/goprogram/exit"
+	"github.com/spf13/cobra"
+	"go.tkw01536.de/pkglib/exit"
 )
 
-// DrupalSetting is then 'drupal_setting' command.
-var DrupalSetting wisski_distillery.Command = setting{}
+func NewDrupalSettingCommand() *cobra.Command {
+	impl := new(setting)
+
+	cmd := &cobra.Command{
+		Use:     "drupal_setting SLUG SETTING [VALUE]",
+		Short:   "get or set a drupal setting",
+		Args:    cobra.RangeArgs(2, 3),
+		PreRunE: impl.ParseArgs,
+		RunE:    impl.Exec,
+	}
+
+	return cmd
+}
 
 type setting struct {
 	Positionals struct {
-		Slug    string `description:"slug of instance to get or set value for" positional-arg-name:"SLUG"    required:"1-1"`
-		Setting string `description:"name of setting to read or write"         positional-arg-name:"SETTING" require:"1-1"`
-		Value   string `description:"json serialization of value to write"     positional-arg-name:"VALUE"`
-	} `positional-args:"true"`
-}
-
-func (setting) Description() wisski_distillery.Description {
-	return wisski_distillery.Description{
-		Requirements: cli.Requirements{
-			NeedsDistillery: true,
-		},
-		Command:     "drupal_setting",
-		Description: "get or set a drupal setting",
+		Slug    string
+		Setting string
+		Value   string
 	}
 }
 
+func (ds *setting) ParseArgs(cmd *cobra.Command, args []string) error {
+	ds.Positionals.Slug = args[0]
+	ds.Positionals.Setting = args[1]
+	if len(args) >= 3 {
+		ds.Positionals.Value = args[2]
+	}
+	return nil
+}
+
 var (
-	errSettingGet    = exit.NewErrorWithCode("unable to get setting", exit.ExitGeneric)
-	errSettingSet    = exit.NewErrorWithCode("unable to set setting", exit.ExitGeneric)
-	errSettingWissKI = exit.NewErrorWithCode("unable to get WissKI", exit.ExitGeneric)
+	errSettingGet    = exit.NewErrorWithCode("unable to get setting", cli.ExitGeneric)
+	errSettingSet    = exit.NewErrorWithCode("unable to set setting", cli.ExitGeneric)
+	errSettingWissKI = exit.NewErrorWithCode("unable to get WissKI", cli.ExitGeneric)
 )
 
-func (ds setting) Run(context wisski_distillery.Context) error {
-	instance, err := context.Environment.Instances().WissKI(context.Context, ds.Positionals.Slug)
+func (ds *setting) Exec(cmd *cobra.Command, args []string) error {
+	dis, err := cli.GetDistillery(cmd, cli.Requirements{
+		NeedsDistillery: true,
+	})
+	if err != nil {
+		return fmt.Errorf("%w: %w", errSettingWissKI, err)
+	}
+
+	instance, err := dis.Instances().WissKI(cmd.Context(), ds.Positionals.Slug)
 	if err != nil {
 		return fmt.Errorf("%w: %w", errSettingWissKI, err)
 	}
 
 	if ds.Positionals.Value == "" {
 		// get the setting
-		value, err := instance.Settings().Get(context.Context, nil, ds.Positionals.Setting)
+		value, err := instance.Settings().Get(cmd.Context(), nil, ds.Positionals.Setting)
 		if err != nil {
 			return fmt.Errorf("%w: %w", errSettingGet, err)
 		}
 
 		// and print it
-		if err := json.NewEncoder(context.Stdout).Encode(value); err != nil {
+		if err := json.NewEncoder(cmd.OutOrStdout()).Encode(value); err != nil {
 			return fmt.Errorf("%w: %w", errSettingGet, err)
 		}
 
 		// finish with a newline
-		_, _ = context.Println("")
+		_, _ = fmt.Fprintln(cmd.OutOrStdout(), "")
 		return nil
 	}
 
@@ -67,7 +84,7 @@ func (ds setting) Run(context wisski_distillery.Context) error {
 	}
 
 	// set the serialized value!
-	if err := instance.Settings().Set(context.Context, nil, ds.Positionals.Setting, data); err != nil {
+	if err := instance.Settings().Set(cmd.Context(), nil, ds.Positionals.Setting, data); err != nil {
 		return fmt.Errorf("%w: %w", errSettingSet, err)
 	}
 

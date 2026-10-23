@@ -1,13 +1,18 @@
 //spellchecker:words barrel
 package barrel
 
-//spellchecker:words embed path filepath github wisski distillery internal component ingredient
+//spellchecker:words embed path filepath github wisski distillery internal component ingredient dockerx
 import (
 	"embed"
+	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/FAU-CDI/wisski-distillery/internal/dis/component"
 	"github.com/FAU-CDI/wisski-distillery/internal/wisski/ingredient"
+	"github.com/FAU-CDI/wisski-distillery/pkg/dockerx"
+	"go.tkw01536.de/pkglib/yamlx"
+	"gopkg.in/yaml.v3"
 )
 
 //go:embed all:barrel
@@ -23,15 +28,42 @@ const phpIniName = "custom.ini"
 //go:embed custom.ini
 var phpIniTemplate string
 
-// Barrel returns a stack representing the running WissKI Instance.
-func (barrel *Barrel) Stack() component.StackWithResources {
+// Barrel returns a stack belonging to this WissKI instance.
+// The stack may or may not be running.
+func (barrel *Barrel) OpenStack() (component.StackWithResources, error) {
 	liquid := ingredient.GetLiquid(barrel)
 	config := ingredient.GetStill(barrel).Config
 
+	stack, err := dockerx.NewStack(liquid.Docker, liquid.FilesystemBase)
+	if err != nil {
+		return component.StackWithResources{}, fmt.Errorf("failed to get docker client: %w", err)
+	}
+
+	makeDirs := []string{"data", ".composer"}
+	if liquid.DedicatedSQL {
+		makeDirs = append(
+			makeDirs,
+			filepath.Join("sql", "data"),
+			filepath.Join("sql", "imports"),
+		)
+	}
+	if liquid.DedicatedTriplestore {
+		makeDirs = append(
+			makeDirs,
+			filepath.Join("triplestore", "data"),
+			filepath.Join("triplestore", "logs"),
+		)
+	}
+	if liquid.SolrServer {
+		makeDirs = append(
+			makeDirs,
+			filepath.Join("solr", "data"),
+			filepath.Join("solr", "config"),
+		)
+	}
+
 	return component.StackWithResources{
-		Stack: component.Stack{
-			Dir: liquid.FilesystemBase,
-		},
+		Stack: stack,
 
 		Resources:   barrelResources,
 		ContextPath: "barrel",
@@ -39,6 +71,79 @@ func (barrel *Barrel) Stack() component.StackWithResources {
 		CreateFiles: map[string]string{
 			localSettingsName: localSettingsTemplate,
 			phpIniName:        phpIniTemplate,
+		},
+
+		ComposerYML: func(root *yaml.Node) (*yaml.Node, error) {
+			labelsNode, err := yamlx.Find(root, "services", "barrel", "labels")
+			if err != nil {
+				return nil, fmt.Errorf("failed to find labels: %w", err)
+			}
+			var labels []string //nolint:prealloc
+			if err := labelsNode.Decode(&labels); err != nil {
+				return nil, fmt.Errorf("failed to decode labels: %w", err)
+			}
+
+			// add the middleware labels
+			middleswares := barrel.makeMidlewares()
+			labels = append(labels, makeMiddlewareLabels(middleswares...)...)
+
+			if err := yamlx.ReplaceWith(root, labels, "services", "barrel", "labels"); err != nil {
+				return nil, fmt.Errorf("failed to replace labels: %w", err)
+			}
+
+			// find the depends_on of the barrel service
+			dependencyMap := map[string]struct{}{}
+			{
+				barrelDependsOn, err := yamlx.Find(root, "services", "barrel", "depends_on")
+				if err != nil {
+					return nil, fmt.Errorf("failed to find depends_on: %w", err)
+				}
+				var dependsOn []string
+				if err := barrelDependsOn.Decode(&dependsOn); err != nil {
+					return nil, fmt.Errorf("failed to decode depends_on: %w", err)
+				}
+				for _, dependency := range dependsOn {
+					dependencyMap[dependency] = struct{}{}
+				}
+			}
+
+			// remove non-needed services
+			if !liquid.DedicatedSQL {
+				delete(dependencyMap, "dedicatedsql")
+				if err := yamlx.Remove(root, "services", "dedicatedsql"); err != nil {
+					return nil, fmt.Errorf("failed to remove dedicatedsql service: %w", err)
+				}
+			}
+			if !liquid.DedicatedTriplestore {
+				delete(dependencyMap, "dedicatedtriplestore")
+				if err := yamlx.Remove(root, "services", "dedicatedtriplestore"); err != nil {
+					return nil, fmt.Errorf("failed to remove dedicatedtriplestore service: %w", err)
+				}
+			}
+			if !liquid.SolrServer {
+				delete(dependencyMap, "solr")
+				if err := yamlx.Remove(root, "services", "solr"); err != nil {
+					return nil, fmt.Errorf("failed to remove solr service: %w", err)
+				}
+			}
+
+			// if we don't have any services, remove the default network
+			if len(dependencyMap) == 0 {
+				if err := yamlx.Remove(root, "networks", "default"); err != nil {
+					return nil, fmt.Errorf("failed to remove default network: %w", err)
+				}
+			}
+
+			// re-create the depends_on list of the barrel service
+			dependsOnKeys := make([]string, 0, len(dependencyMap))
+			for key := range dependencyMap {
+				dependsOnKeys = append(dependsOnKeys, key)
+			}
+			if err := yamlx.ReplaceWith(root, dependsOnKeys, "services", "barrel", "depends_on"); err != nil {
+				return nil, fmt.Errorf("failed to update depends_on: %w", err)
+			}
+
+			return root, nil
 		},
 
 		EnvContext: map[string]string{
@@ -50,6 +155,9 @@ func (barrel *Barrel) Stack() component.StackWithResources {
 			"HTTPS_ENABLED":   config.HTTP.HTTPSEnabledEnv(),
 
 			"DATA_PATH":   filepath.Join(liquid.FilesystemBase, "data"),
+			"SQL_PATH":    filepath.Join(liquid.FilesystemBase, "sql"),
+			"TS_PATH":     filepath.Join(liquid.FilesystemBase, "triplestore"),
+			"SOLR_PATH":   filepath.Join(liquid.FilesystemBase, "solr"),
 			"RUNTIME_DIR": config.Paths.RuntimeDir(),
 
 			"LOCAL_SETTINGS_PATH":  filepath.Join(liquid.FilesystemBase, localSettingsName),
@@ -64,6 +172,48 @@ func (barrel *Barrel) Stack() component.StackWithResources {
 			"CONTENT_SECURITY_POLICY": liquid.ContentSecurityPolicy,
 		},
 
-		MakeDirs: []string{"data", ".composer"},
+		MakeDirs: makeDirs,
+	}, nil
+}
+
+func (barrel *Barrel) makeMidlewares() []map[string]string {
+	middleswares := []map[string]string{
+		map[string]string{
+			"headers.customresponseheaders.x-drupal-cache":         "",
+			"headers.customresponseheaders.x-drupal-dynamic-cache": "",
+			"headers.customresponseheaders.x-generator":            "",
+			"headers.customresponseheaders.x-powered-by":           "",
+			"headers.customresponseheaders.Server":                 "",
+		},
 	}
+
+	liquid := ingredient.GetLiquid(barrel)
+	if len(liquid.IPAllowlist) != 0 {
+		middleswares = append(middleswares, map[string]string{
+			"ipallowlist.sourcerange": liquid.IPAllowlist,
+		})
+	}
+
+	return middleswares
+}
+
+func makeMiddlewareLabels(middleswares ...map[string]string) (labels []string) {
+	var counter int
+	var names []string
+	for _, middleware := range middleswares {
+		if len(middleware) == 0 {
+			continue
+		}
+		counter++
+		name := fmt.Sprintf("wisski_%d_${SLUG}", counter)
+		names = append(names, name+"@docker")
+		for key, value := range middleware {
+			labels = append(labels, fmt.Sprintf("traefik.http.middlewares.%s.%s=%s", name, key, value))
+		}
+	}
+
+	if len(names) > 0 {
+		labels = append(labels, "traefik.http.routers.wisski_${SLUG}.middlewares="+strings.Join(names, ","))
+	}
+	return labels
 }

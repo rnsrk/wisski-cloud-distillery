@@ -3,7 +3,7 @@
 //spellchecker:words targz
 package targz
 
-//spellchecker:words archive compress gzip path filepath github pkglib umaskfree
+//spellchecker:words archive compress gzip path filepath pkglib errorsx umaskfree
 import (
 	"archive/tar"
 	"compress/gzip"
@@ -13,8 +13,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/tkw1536/pkglib/errorsx"
-	"github.com/tkw1536/pkglib/fsx/umaskfree"
+	"go.tkw01536.de/pkglib/errorsx"
+	"go.tkw01536.de/pkglib/fsx/umaskfree"
 )
 
 // Package packages the source directory into a 'tar.gz' file into destination.
@@ -81,7 +81,7 @@ func Package(dst, src string, onCopy func(rel string, src string)) (count int64,
 		}
 
 		// open the file
-		handle, err := os.Open(path) // #nosec G304 -- intended
+		handle, err := os.Open(path) // #nosec G304,G122 -- intended
 		if err != nil {
 			return fmt.Errorf("failed to open file: %w", err)
 		}

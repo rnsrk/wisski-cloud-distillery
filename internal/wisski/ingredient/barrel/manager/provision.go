@@ -1,7 +1,7 @@
 //spellchecker:words manager
 package manager
 
-//spellchecker:words context time github wisski distillery internal component models ingredient barrel composer extras logging pkglib contextx stream
+//spellchecker:words context errors time github wisski distillery internal models ingredient barrel composer dockerx logging pkglib contextx errorsx stream
 import (
 	"context"
 	"errors"
@@ -14,17 +14,31 @@ import (
 	"github.com/FAU-CDI/wisski-distillery/internal/wisski/ingredient"
 	"github.com/FAU-CDI/wisski-distillery/internal/wisski/ingredient/barrel"
 	"github.com/FAU-CDI/wisski-distillery/internal/wisski/ingredient/barrel/composer"
+	"github.com/FAU-CDI/wisski-distillery/pkg/dockerx"
 	"github.com/FAU-CDI/wisski-distillery/pkg/logging"
-	"github.com/tkw1536/pkglib/contextx"
-	"github.com/tkw1536/pkglib/errorsx"
-	"github.com/tkw1536/pkglib/stream"
+	"go.tkw01536.de/pkglib/contextx"
+	"go.tkw01536.de/pkglib/errorsx"
+	"go.tkw01536.de/pkglib/stream"
 )
 
 // Provision applies defaults to flags, to ensure some values are set.
-func (manager *Manager) Provision(ctx context.Context, progress io.Writer, system models.System, flags Profile) (e error) {
+func (manager *Manager) Provision(ctx context.Context, progress io.Writer, system models.System, flags Profile, lateProvisionables []component.Provisionable) (e error) {
 	// Force building and applying the system!
 	if err := manager.dependencies.SystemManager.ApplyInitial(ctx, progress, system); err != nil {
 		return fmt.Errorf("failed to apply initial configuration: %w", err)
+	}
+
+	stack, err := manager.dependencies.Barrel.OpenStack()
+	if err != nil {
+		return fmt.Errorf("failed to open stack: %w", err)
+	}
+	defer errorsx.Close(stack, &e, "stack")
+
+	liquid := ingredient.GetLiquid(manager)
+	for _, pc := range lateProvisionables {
+		if err := pc.Provision(ctx, progress, liquid.Instance, liquid.Domain(), &stack); err != nil {
+			return fmt.Errorf("failed to provision %s: %w", pc.Name(), err)
+		}
 	}
 
 	// Create the composer directory!
@@ -32,7 +46,7 @@ func (manager *Manager) Provision(ctx context.Context, progress io.Writer, syste
 		return fmt.Errorf("failed to log message: %w", err)
 	}
 	{
-		code, err := manager.dependencies.Barrel.Stack().Run(ctx, stream.FromNil(), component.RunFlags{Detach: true, AutoRemove: true}, "barrel", "sudo", "-u", "www-data", "mkdir", "-p", barrel.ComposerDirectory)
+		code, err := stack.Run(ctx, stream.FromNil(), dockerx.RunFlags{Detach: true, AutoRemove: true}, "barrel", "sudo", "-u", "www-data", "mkdir", "-p", barrel.ComposerDirectory)
 		if code != 0 {
 			err = barrel.ExitError(code)
 		}
@@ -42,7 +56,7 @@ func (manager *Manager) Provision(ctx context.Context, progress io.Writer, syste
 	}
 
 	// start the container, and have it do nothing!
-	code, err := manager.dependencies.Barrel.Stack().Run(ctx, stream.FromNil(), component.RunFlags{Detach: true, AutoRemove: true}, "barrel", "tail", "-f", "/dev/null")
+	code, err := stack.Run(ctx, stream.FromNil(), dockerx.RunFlags{Detach: true, AutoRemove: true}, "barrel", "tail", "-f", "/dev/null")
 	if code != 0 {
 		err = barrel.ExitError(code)
 	}
@@ -56,7 +70,7 @@ func (manager *Manager) Provision(ctx context.Context, progress io.Writer, syste
 		defer cancel()
 
 		// stop the container (even if the context was cancelled)
-		if err := manager.dependencies.Barrel.Stack().DownAll(anyways, progress); err != nil {
+		if err := stack.DownAll(anyways, progress); err != nil {
 			err = fmt.Errorf("unable to down stack: %w", err)
 			e = errorsx.Combine(e, err)
 		}
@@ -129,8 +143,7 @@ func (provision *Manager) bootstrap(ctx context.Context, progress io.Writer, fla
 	}
 
 	liquid := ingredient.GetLiquid(provision)
-
-	var sqlDBURL = "mysql://" + liquid.SqlUsername + ":" + liquid.SqlPassword + "@sql/" + liquid.SqlDatabase
+	sqlDBURL := liquid.BoundSQL().SQLUrl()
 
 	// Use 'drush' to run the site-installation.
 	// Here we need to use the username, password and database creds we made above.
@@ -144,6 +157,7 @@ func (provision *Manager) bootstrap(ctx context.Context, progress io.Writer, fla
 			"standard", "--yes", "--site-name="+liquid.Domain(),
 			"--account-name="+liquid.DrupalUsername, "--account-pass="+liquid.DrupalPassword,
 			"--db-url="+sqlDBURL,
+			"-vvv",
 		); err != nil {
 			return fmt.Errorf("failed to execute drush site-install command: %w", err)
 		}
@@ -168,7 +182,7 @@ func (provision *Manager) bootstrap(ctx context.Context, progress io.Writer, fla
 		return fmt.Errorf("failed to log progress: %w", err)
 	}
 	{
-		if err := provision.dependencies.Barrel.ShellScript(ctx, stream.NonInteractive(progress), "mkdir", "-p", barrel.OntologyDirectory); err != nil {
+		if err := provision.dependencies.Barrel.BashScript(ctx, stream.NonInteractive(progress), "mkdir", "-p", barrel.OntologyDirectory); err != nil {
 			return fmt.Errorf("failed to create directory: %w", err)
 		}
 	}
